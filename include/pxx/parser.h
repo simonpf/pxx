@@ -4,6 +4,7 @@
 #include <clang-c/Index.h>
 #include <string>
 #include <iostream>
+#include <pxx/ast.h>
 
 namespace pxx {
 
@@ -16,9 +17,12 @@ std::ostream &operator<<(std::ostream &stream, const CXString &s) {
 class Parser {
 public:
   Parser(std::string filename) {
-
+    const char *command_line_args[] = {"-x", "c++"};
     index_ = clang_createIndex(0, 0);
-    unit_ = clang_parseTranslationUnit(index_, filename.c_str(), nullptr, 0, nullptr, 0,
+    unit_ = clang_parseTranslationUnit(index_,
+                                       filename.c_str(),
+                                       command_line_args, 2,
+                                       nullptr, 0,
                                        CXTranslationUnit_None);
     if (unit_ == nullptr) {
       throw std::runtime_error("Failed to parse the translation unit.");
@@ -36,6 +40,12 @@ public:
             return CXChildVisit_Recurse;
         },
         nullptr);
+  }
+
+  ast::TranslationUnit parse() {
+      CXCursor cursor = clang_getTranslationUnitCursor(unit_);
+      ast::TranslationUnit tu{cursor};
+      return tu;
   }
 
   ~Parser() {

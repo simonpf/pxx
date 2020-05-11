@@ -1,0 +1,14 @@
+#define PY_SSIZE_T_CLEAN
+#include <pybind11/pybind11.h>
+
+## for include in includes
+#include <{{ include }}>
+## endfor
+
+namespace py = pybind11;
+
+PYBIND11_MODULE({{ module_name }}, m) {
+{% for class in classes %}
+{% include "class.template" %}
+{% endfor %}
+}

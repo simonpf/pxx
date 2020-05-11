@@ -38,7 +38,13 @@ set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 # Libraries.
 #
 
-find_package(Python COMPONENTS Development)
+find_package(Python COMPONENTS Interpreter Development)
+
+# Python module binary
+add_subdirectory(src)
 
 # Python module
-add_subdirectory(src)
+add_subdirectory(python)
+
+# tests
+add_subdirectory(test)
