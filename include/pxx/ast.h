@@ -17,8 +17,34 @@ CXChildVisitResult parse_function(CXCursor c, CXCursor parent,
 CXChildVisitResult parse_class(CXCursor c, CXCursor parent,
                                CXClientData client_data);
 
-CXChildVisitResult parse_translation_unit(CXCursor c, CXCursor parent,
-                                          CXClientData client_data);
+CXChildVisitResult parse_namespace(CXCursor c, CXCursor parent,
+                                   CXClientData client_data);
+
+enum class access_specifier_t {pub, prot, priv};
+std::string to_string(access_specifier_t as) {
+    switch (as) {
+    case access_specifier_t::pub:
+        return "public";
+    case access_specifier_t::prot:
+        return "protected";
+    case access_specifier_t::priv:
+        return "private";
+    }
+    return "";
+}
+
+enum class storage_class_t {ext, stat, none};
+std::string to_string(storage_class_t sc) {
+    switch (sc) {
+    case storage_class_t::ext:
+        return "extern";
+    case storage_class_t::stat:
+        return "static";
+    case storage_class_t::none:
+        return "none";
+    }
+    return "";
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // CxxObject
@@ -27,52 +53,115 @@ CXChildVisitResult parse_translation_unit(CXCursor c, CXCursor parent,
 class CxxObject {
 public:
   CxxObject(CXCursor c) : cursor_(c) {
-
     CXString s = clang_getCursorSpelling(c);
     name_ = clang_getCString(s);
     clang_disposeString(s);
   }
 
-  std::string get_name() { return name_; }
+  CxxObject(CXCursor c, const CxxObject *p) {
+    CXString s = clang_getCursorSpelling(c);
+    name_ = clang_getCString(s);
+    qualified_name_ = p->get_qualified_name() + "::" + name_;
+    clang_disposeString(s);
+  }
+
+  std::string get_name() const { return name_; }
+  std::string get_qualified_name() const { return qualified_name_; }
 
   friend std::ostream &operator<<(std::ostream &stream, const CxxObject &cl);
 
 protected:
   CXCursor cursor_;
   std::string name_;
+  std::string qualified_name_;
+  bool valid_ = true;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// Variable
+// Variables
 ////////////////////////////////////////////////////////////////////////////////
 
 class Variable : public CxxObject {
 public:
-  Variable(CXCursor c) : CxxObject(c) {
+  Variable(CXCursor c, const CxxObject *p) : CxxObject(c, p) {
     type_ = clang_getCursorType(c);
     CXString s = clang_getTypeSpelling(type_);
-    type_spelling_ = clang_getCString(s);
+    type_name_ = clang_getCString(s);
     clang_disposeString(s);
+    const_ = static_cast<bool>(clang_isConstQualifiedType(type_));
   }
 
-  std::string get_type_spelling() const { return type_spelling_; }
+  std::string get_type_spelling() const { return type_name_; }
   friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
   friend void to_json(json &j, const Variable &v);
 
-private:
-  std::string type_spelling_;
+protected:
+  std::string type_name_;
+  bool const_;
   CXType type_;
 };
 
 void to_json(json &j, const Variable &v) {
   j["name"] = v.name_;
-  j["type_spelling"] = v.type_spelling_;
+  j["type_name"] = v.type_name_;
+  j["const"] = v.const_;
 }
 
 std::ostream &operator<<(std::ostream &stream, const Variable &v) {
-  stream << v.type_spelling_ << " " << v.name_ << std::endl;
+  stream << v.type_name_ << " " << v.name_ << std::endl;
   return stream;
 }
+
+class MemberVariable : public Variable {
+public:
+  MemberVariable(CXCursor c, const CxxObject *p) : Variable(c, p) {
+
+    // retrieve access specifier.
+    CX_CXXAccessSpecifier as = clang_getCXXAccessSpecifier(c);
+    if (as == CX_CXXPublic) {
+      access_specifier_ = access_specifier_t::pub;
+    } else if (as == CX_CXXProtected) {
+      access_specifier_ = access_specifier_t::prot;
+    } else if (as == CX_CXXPrivate) {
+      access_specifier_ = access_specifier_t::priv;
+    } else {
+      valid_ = false;
+    }
+
+    // retrieve storage class.
+    CX_StorageClass sc = clang_Cursor_getStorageClass(c);
+    if (sc == CX_SC_None) {
+      storage_class_ = storage_class_t::none;
+    } else if (sc == CX_SC_Extern) {
+      storage_class_ = storage_class_t::ext;
+    } else if (sc == CX_SC_Static) {
+      storage_class_ = storage_class_t::stat;
+    } else {
+      valid_ = false;
+    }
+  }
+
+std::string
+get_type_spelling() const {
+  return type_name_;
+}
+
+friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
+friend void to_json(json &j, const MemberVariable &v);
+
+private:
+  access_specifier_t access_specifier_;
+  storage_class_t storage_class_;
+};
+
+void to_json(json &j, const MemberVariable &v) {
+    j["name"] = v.name_;
+    j["qualified_name"] = v.get_qualified_name();
+    j["type_name"] = v.type_name_;
+    j["access"] = to_string(v.access_specifier_);
+    j["storage"] = to_string(v.storage_class_);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Functions
@@ -80,13 +169,13 @@ std::ostream &operator<<(std::ostream &stream, const Variable &v) {
 
 class Function : public CxxObject {
 public:
-  Function(CXCursor c) : CxxObject(c) {
+  Function(CXCursor c, const CxxObject *p) : CxxObject(c, p) {
     // Continue AST traversal.
     clang_visitChildren(cursor_, &parse_function,
 
                         reinterpret_cast<CXClientData>(this));
   }
-  void add_parameter(Variable v) { parameters_.push_back(v); }
+  void add_parameter(CXCursor c) { parameters_.emplace_back(c, this); }
   friend std::ostream &operator<<(std::ostream &stream, const Function &cl);
   friend void to_json(json &j, const Function &f);
 
@@ -95,8 +184,8 @@ private:
 };
 
 void to_json(json &j, const Function &f) {
-  j["name"] = f.name_;
-  j["cxx_spelling"] = f.name_;
+  j["name"] = f.get_name();
+  j["qualified_name"] = f.get_qualified_name();
   j["parameters"] = f.parameters_;
 }
 
@@ -119,17 +208,17 @@ std::ostream &operator<<(std::ostream &stream, const Function &f) {
 
 class Class : public CxxObject {
 public:
-  Class(CXCursor c) : CxxObject(c) {
+  Class(CXCursor c, const CxxObject *p) : CxxObject(c, p) {
     // Continue AST traversal.
     clang_visitChildren(cursor_, &parse_class,
                         reinterpret_cast<CXClientData>(this));
   }
 
-  void add_constructor(Function f) { constructors_.push_back(f); }
+  void add_constructor(CXCursor c) { constructors_.emplace_back(c, this); }
 
-  void add_method(Function f) { methods_.push_back(f); }
+  void add_method(CXCursor c) { methods_.emplace_back(c, this); }
 
-  void add_data_member(Variable v) { data_members_.push_back(v); }
+  void add_data_member(CXCursor c) { data_members_.emplace_back(c, this); }
 
   friend std::ostream &operator<<(std::ostream &stream, const Class &cl);
   friend void to_json(json &j, const Class &c);
@@ -137,13 +226,12 @@ public:
 private:
   std::vector<Function> constructors_;
   std::vector<Function> methods_;
-  std::vector<Variable> data_members_;
+  std::vector<MemberVariable> data_members_;
 };
 
 void to_json(json &j, const Class &c) {
-  j["name"] = c.name_;
-  j["cxx_spelling"] = c.name_;
-  j["python_spelling"] = c.name_;
+  j["name"] = c.get_name();
+  j["qualified_name"] = c.get_qualified_name();
   j["constructors"] = c.constructors_;
   j["methods"] = c.methods_;
   j["data_members"] = c.data_members_;
@@ -167,20 +255,28 @@ std::ostream &operator<<(std::ostream &stream, const Class &cl) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Translation Unit
+// Namespace
 ////////////////////////////////////////////////////////////////////////////////
 
-class TranslationUnit {
+class Namespace : public CxxObject {
 public:
-  TranslationUnit(CXCursor c) : cursor_(c) {
-    clang_visitChildren(cursor_, &parse_translation_unit,
+
+  Namespace(CXCursor c) : CxxObject(c) {
+    clang_visitChildren(cursor_, &parse_namespace,
                         reinterpret_cast<CXClientData>(this));
   }
-  void add(const Class &cl) { classes_.push_back(cl); }
 
-  friend std::ostream &operator<<(std::ostream &stream,
-                                  const TranslationUnit &tu);
-  friend void to_json(json &j, const TranslationUnit &tu);
+  Namespace(CXCursor c, const CxxObject *p) : CxxObject(c, p) {
+    clang_visitChildren(cursor_, &parse_namespace,
+                        reinterpret_cast<CXClientData>(this));
+  }
+
+  void add_class(CXCursor c) { classes_.emplace_back(c, this); }
+  void add_function(CXCursor c) { functions_.emplace_back(c, this); }
+  void add_namespace(CXCursor c) { namespaces_.emplace_back(c, this); }
+
+  friend std::ostream &operator<<(std::ostream &stream, const Namespace &ns);
+  friend void to_json(json &j, const Namespace &ns);
 
   void print() { std::cout << *this << std::endl; }
 
@@ -190,35 +286,61 @@ public:
     std::cout << value << std::endl;
   }
 
-private:
+protected:
   CXCursor cursor_;
   std::vector<Class> classes_;
+  std::vector<Function> functions_;
+  std::vector<Namespace> namespaces_;
 };
 
-std::ostream &operator<<(std::ostream &stream, const TranslationUnit &tu) {
-  stream << "A C++ translation unit." << std::endl << std::endl;
-  stream << "Defined classes:" << std::endl;
-  for (auto &&cl : tu.classes_) {
-    std::cout << std::endl;
-    std::cout << cl;
-  }
-  return stream;
+void to_json(json &j, const Namespace &ns) {
+  j["classes"] = ns.classes_;
+  j["functions"] = ns.functions_;
+  j["namespaces"] = ns.namespaces_;
 }
 
-void to_json(json &j, const TranslationUnit &tu) { j["classes"] = tu.classes_; }
+std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {
+    stream << "A C++ namespace unit." << std::endl << std::endl;
+    stream << "Defined classes:" << std::endl;
+    for (auto &&cl : ns.classes_) {
+        std::cout << std::endl;
+        std::cout << cl;
+    }
+    return stream;
+}
+
+class TranslationUnit : public Namespace {
+public:
+  TranslationUnit(CXCursor c) : Namespace(c) {}
+  friend std::ostream &operator<<(std::ostream &stream, const TranslationUnit &tu);
+};
+
+
+std::ostream &operator<<(std::ostream &stream, const TranslationUnit &tu) {
+    stream << "A C++ translation unit." << std::endl << std::endl;
+    stream << "Defined classes:" << std::endl;
+    for (auto &&cl : tu.classes_) {
+        std::cout << std::endl;
+        std::cout << cl;
+    }
+    return stream;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Translation Unit
 ////////////////////////////////////////////////////////////////////////////////
 
-CXChildVisitResult parse_translation_unit(CXCursor c, CXCursor parent,
-                                          CXClientData client_data) {
-  TranslationUnit *tu = reinterpret_cast<TranslationUnit *>(client_data);
+CXChildVisitResult parse_namespace(CXCursor c,
+                                   CXCursor /*parent*/,
+                                   CXClientData client_data) {
+  Namespace *ns = reinterpret_cast<Namespace *>(client_data);
   CXCursorKind k = clang_getCursorKind(c);
   switch (k) {
   case CXCursor_ClassDecl: {
-    Class cl(c);
-    tu->add(cl);
+    ns->add_class(c);
+  } break;
+  case CXCursor_Namespace: {
+      ns->add_namespace(c);
   } break;
   default:
     break;
@@ -226,22 +348,20 @@ CXChildVisitResult parse_translation_unit(CXCursor c, CXCursor parent,
   return CXChildVisit_Continue;
 }
 
-CXChildVisitResult parse_class(CXCursor c, CXCursor parent,
+CXChildVisitResult parse_class(CXCursor c,
+                               CXCursor /*parent*/,
                                CXClientData client_data) {
   Class *cl = reinterpret_cast<Class *>(client_data);
   CXCursorKind k = clang_getCursorKind(c);
   switch (k) {
   case CXCursor_Constructor: {
-    Function f(c);
-    cl->add_constructor(f);
+    cl->add_constructor(c);
   } break;
   case CXCursor_CXXMethod: {
-    Function f(c);
-    cl->add_method(f);
+    cl->add_method(c);
   } break;
   case CXCursor_FieldDecl: {
-    Variable v(c);
-    cl->add_data_member(v);
+    cl->add_data_member(c);
   } break;
   default:
     break;
@@ -249,14 +369,14 @@ CXChildVisitResult parse_class(CXCursor c, CXCursor parent,
   return CXChildVisit_Continue;
 }
 
-CXChildVisitResult parse_function(CXCursor c, CXCursor parent,
+CXChildVisitResult parse_function(CXCursor c,
+                                  CXCursor /*parent*/,
                                   CXClientData client_data) {
   Function *f = reinterpret_cast<Function *>(client_data);
   CXCursorKind k = clang_getCursorKind(c);
   switch (k) {
   case CXCursor_ParmDecl: {
-    Variable p(c);
-    f->add_parameter(p);
+    f->add_parameter(c);
   } break;
   default:
     break;
@@ -266,3 +386,4 @@ CXChildVisitResult parse_function(CXCursor c, CXCursor parent,
 } // namespace pxx::ast
 
 #endif
+

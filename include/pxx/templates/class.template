@@ -1,7 +1,13 @@
     py::class_<{{ class.cxx_spelling }}>(m, "{{ class.python_spelling }}")
     {% for c in class.constructors %}
-    .def(py::init<{% for t in c.parameters %}{{ t.type_spelling }}{% if loop.index1 < length(c.parameters) %},{% endif %}{% endfor %}>())
+    .def(py::init<{% for t in c.parameters %}{{ t.type_name }}{% if loop.index1 < length(c.parameters) %},{% endif %}{% endfor %}>())
     {% endfor %}
     {% for m in class.methods %}
     .def(\"{{ m.name }}\", &{{ m.cxx_spelling }})
+    {% for m in class.data_members %}
+    {% if m.access == public %}
+    {% if m.const == true %}
+    .def_readonly(m.name, &m.qualified_name)
+    {% else %}
+    .def_readwrite(m.name, &m.qualified_name)
     {% endfor %};

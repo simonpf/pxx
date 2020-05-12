@@ -48,3 +48,10 @@ add_subdirectory(python)
 
 # tests
 add_subdirectory(test)
+
+file(GLOB_RECURSE pxx_headers include "include/*.h")
+file(GLOB_RECURSE pxx_templates include "include/*.template")
+set(pxx_source_files "")
+list(APPEND pxx_source_files ${pxx_headers})
+list(APPEND pxx_source_files ${pxx_templates})
+set(pxx_source_files ${pxx_source_files} CACHE INTERNAL "The PXX source files" FORCE)

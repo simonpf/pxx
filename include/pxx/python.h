@@ -17,7 +17,7 @@ path template_directory = path(__FILE__).parent_path().append("templates/");
 class Module {
 public:
   Module(std::string name, std::vector<std::string> includes)
-      : name_(name), includes_(includes), environment_(template_directory) {
+      : environment_(template_directory), includes_(includes), name_(name) {
     environment_.set_trim_blocks(true);
   }
 
@@ -32,9 +32,9 @@ public:
   }
 
 private:
+  inja::Environment environment_;
   std::vector<std::string> includes_;
   std::string name_;
-  inja::Environment environment_;
 };
 
 } // namespace pxx::python

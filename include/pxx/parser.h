@@ -33,7 +33,7 @@ public:
     CXCursor cursor = clang_getTranslationUnitCursor(unit_);
     clang_visitChildren(
         cursor,
-        [](CXCursor c, CXCursor parent, CXClientData client_data)
+        [](CXCursor c, CXCursor /*parent*/, CXClientData /*client_data*/)
         {
             std::cout << "Cursor '" << clang_getCursorSpelling(c) << "' of kind '"
                   << clang_getCursorKindSpelling(clang_getCursorKind(c)) << "'\n";
