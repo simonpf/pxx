@@ -58,10 +58,15 @@ public:
     clang_disposeString(s);
   }
 
-  CxxObject(CXCursor c, const CxxObject *p) {
+CxxObject(CXCursor c, const CxxObject &p) : cursor_(c) {
     CXString s = clang_getCursorSpelling(c);
     name_ = clang_getCString(s);
-    qualified_name_ = p->get_qualified_name() + "::" + name_;
+    std::string parent_name = p.get_qualified_name();
+    if (parent_name != "") {
+      qualified_name_ = p.get_qualified_name() + "::" + name_;
+    } else {
+      qualified_name_ = name_;
+    }
     clang_disposeString(s);
   }
 
@@ -83,7 +88,7 @@ protected:
 
 class Variable : public CxxObject {
 public:
-  Variable(CXCursor c, const CxxObject *p) : CxxObject(c, p) {
+  Variable(CXCursor c, const CxxObject &p) : CxxObject(c, p) {
     type_ = clang_getCursorType(c);
     CXString s = clang_getTypeSpelling(type_);
     type_name_ = clang_getCString(s);
@@ -114,7 +119,7 @@ std::ostream &operator<<(std::ostream &stream, const Variable &v) {
 
 class MemberVariable : public Variable {
 public:
-  MemberVariable(CXCursor c, const CxxObject *p) : Variable(c, p) {
+  MemberVariable(CXCursor c, const CxxObject &p) : Variable(c, p) {
 
     // retrieve access specifier.
     CX_CXXAccessSpecifier as = clang_getCXXAccessSpecifier(c);
@@ -160,6 +165,7 @@ void to_json(json &j, const MemberVariable &v) {
     j["type_name"] = v.type_name_;
     j["access"] = to_string(v.access_specifier_);
     j["storage"] = to_string(v.storage_class_);
+    j["const"] = v.const_;
 }
 
 
@@ -169,13 +175,13 @@ void to_json(json &j, const MemberVariable &v) {
 
 class Function : public CxxObject {
 public:
-  Function(CXCursor c, const CxxObject *p) : CxxObject(c, p) {
+  Function(CXCursor c, const CxxObject &p) : CxxObject(c, p) {
     // Continue AST traversal.
     clang_visitChildren(cursor_, &parse_function,
 
                         reinterpret_cast<CXClientData>(this));
   }
-  void add_parameter(CXCursor c) { parameters_.emplace_back(c, this); }
+  void add_parameter(CXCursor c) { parameters_.emplace_back(c, *this); }
   friend std::ostream &operator<<(std::ostream &stream, const Function &cl);
   friend void to_json(json &j, const Function &f);
 
@@ -208,17 +214,15 @@ std::ostream &operator<<(std::ostream &stream, const Function &f) {
 
 class Class : public CxxObject {
 public:
-  Class(CXCursor c, const CxxObject *p) : CxxObject(c, p) {
+  Class(CXCursor c, const CxxObject &p) : CxxObject(c, p) {
     // Continue AST traversal.
     clang_visitChildren(cursor_, &parse_class,
                         reinterpret_cast<CXClientData>(this));
   }
 
-  void add_constructor(CXCursor c) { constructors_.emplace_back(c, this); }
-
-  void add_method(CXCursor c) { methods_.emplace_back(c, this); }
-
-  void add_data_member(CXCursor c) { data_members_.emplace_back(c, this); }
+  void add_constructor(CXCursor c) { constructors_.emplace_back(c, *this); }
+  void add_method(CXCursor c) { methods_.emplace_back(c, *this); }
+  void add_data_member(CXCursor c) { data_members_.emplace_back(c, *this); }
 
   friend std::ostream &operator<<(std::ostream &stream, const Class &cl);
   friend void to_json(json &j, const Class &c);
@@ -262,29 +266,23 @@ class Namespace : public CxxObject {
 public:
 
   Namespace(CXCursor c) : CxxObject(c) {
+    clang_visitChildren(c, &parse_namespace,
+                        reinterpret_cast<CXClientData>(this));
+  }
+
+  Namespace(CXCursor c, const CxxObject &p) : CxxObject(c, p) {
     clang_visitChildren(cursor_, &parse_namespace,
                         reinterpret_cast<CXClientData>(this));
   }
 
-  Namespace(CXCursor c, const CxxObject *p) : CxxObject(c, p) {
-    clang_visitChildren(cursor_, &parse_namespace,
-                        reinterpret_cast<CXClientData>(this));
-  }
-
-  void add_class(CXCursor c) { classes_.emplace_back(c, this); }
-  void add_function(CXCursor c) { functions_.emplace_back(c, this); }
-  void add_namespace(CXCursor c) { namespaces_.emplace_back(c, this); }
+  void add_class(CXCursor c) { classes_.emplace_back(c, *this); }
+  void add_function(CXCursor c) { functions_.emplace_back(c, *this); }
+  void add_namespace(CXCursor c) { namespaces_.emplace_back(c, *this); }
 
   friend std::ostream &operator<<(std::ostream &stream, const Namespace &ns);
   friend void to_json(json &j, const Namespace &ns);
 
   void print() { std::cout << *this << std::endl; }
-
-  void to_json() {
-    json value{};
-    value["classes"] = classes_;
-    std::cout << value << std::endl;
-  }
 
 protected:
   CXCursor cursor_;
@@ -297,6 +295,7 @@ void to_json(json &j, const Namespace &ns) {
   j["classes"] = ns.classes_;
   j["functions"] = ns.functions_;
   j["namespaces"] = ns.namespaces_;
+  std::cout << j << std::endl;
 }
 
 std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {
@@ -314,7 +313,6 @@ public:
   TranslationUnit(CXCursor c) : Namespace(c) {}
   friend std::ostream &operator<<(std::ostream &stream, const TranslationUnit &tu);
 };
-
 
 std::ostream &operator<<(std::ostream &stream, const TranslationUnit &tu) {
     stream << "A C++ translation unit." << std::endl << std::endl;

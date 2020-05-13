@@ -13,7 +13,7 @@ message(WARNING output_file: ${output_file})
 add_custom_command(
   OUTPUT ${output_file}
   COMMAND ${Python_EXECUTABLE} -m pxx ${input_file} --output_file ${output_file}
-  DEPENDS ${pxx_source_files}
+  DEPENDS ${pxx_source_files} _pxx ${input_file} pxx_python
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/python)
 
 add_library(basic_class SHARED ${output_file})

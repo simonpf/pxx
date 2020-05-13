@@ -11,8 +11,8 @@ PYBIND11_MODULE(_pxx, m) {
         .def(py::init<const std::string &>())
         .def("print", &pxx::Parser::print)
         .def("parse", &pxx::Parser::parse);
-    py::class_<pxx::ast::Namespace>(m, "Namespace")
-        .def("print", &pxx::ast::Namespace::print);
+    py::class_<pxx::ast::TranslationUnit>(m, "TranslationUnit")
+        .def("print", &pxx::ast::TranslationUnit::print);
     py::class_<pxx::python::Module>(m, "Module")
         .def(py::init<std::string, std::vector<std::string>>())
         .def("render", &pxx::python::Module::render);

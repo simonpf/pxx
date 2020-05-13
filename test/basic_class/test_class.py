@@ -10,7 +10,13 @@ except:
 from basic_class import TestClass
 
 def test_basic_class():
+    """
+    Test calling of member function and access to public members.
+    """
     tc = TestClass()
-    tc = TestClass(10)
+    assert(tc.get_string() == "hello")
+    assert(tc.get_int() == 42)
+    assert(tc.public_member_1 == 1)
+    assert(tc.public_member_2 == 2)
 
 

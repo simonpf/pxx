@@ -19,14 +19,18 @@ public:
   Module(std::string name, std::vector<std::string> includes)
       : environment_(template_directory), includes_(includes), name_(name) {
     environment_.set_trim_blocks(true);
+    environment_.set_lstrip_blocks(true);
   }
 
   std::string render(ast::TranslationUnit tu) {
     json data{};
     to_json(data, tu);
+    std::cout << data << std::endl;
     data["module_name"] = name_;
     data["includes"] = includes_;
     auto temp = environment_.parse_template("module.template");
+    environment_.set_trim_blocks(true);
+    environment_.set_lstrip_blocks(true);
     auto result = environment_.render(temp, data);
     return result;
   }
