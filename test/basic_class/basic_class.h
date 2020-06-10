@@ -1,4 +1,3 @@
-
 class TestClass {
 public:
   TestClass(){};

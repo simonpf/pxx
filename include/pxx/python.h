@@ -25,9 +25,16 @@ public:
   std::string render(ast::TranslationUnit tu) {
     json data{};
     to_json(data, tu);
-    std::cout << data << std::endl;
     data["module_name"] = name_;
     data["includes"] = includes_;
+
+    if (tu.has_standard_headers()) {
+        data["standard_headers"] = true;
+    } else {
+        data["standard_headers"] = false;
+    }
+
+
     auto temp = environment_.parse_template("module.template");
     environment_.set_trim_blocks(true);
     environment_.set_lstrip_blocks(true);
