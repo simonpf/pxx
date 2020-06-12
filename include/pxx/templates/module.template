@@ -4,6 +4,9 @@
 {% if standard_headers %}
 #include <pybind11/stl.h>
 {% endif %}
+{% if eigen_headers %}
+#include <pybind11/eigen.h>
+{% endif %}
 
 ## for include in includes
 #include <{{ include }}>

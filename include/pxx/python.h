@@ -2,11 +2,11 @@
 #define __PXX_PYTHON_H__
 
 #include <clang-c/Index.h>
+#include <filesystem>
+#include <inja/inja.hpp>
 #include <iostream>
 #include <string>
 #include <vector>
-#include <filesystem>
-#include <inja/inja.hpp>
 
 namespace pxx::python {
 
@@ -28,12 +28,18 @@ public:
     data["module_name"] = name_;
     data["includes"] = includes_;
 
+    // Required headers.
     if (tu.has_standard_headers()) {
-        data["standard_headers"] = true;
+      data["standard_headers"] = true;
     } else {
-        data["standard_headers"] = false;
+      data["standard_headers"] = false;
     }
-
+    std::cout << "eign: " << tu.uses_eigen() << std::endl;
+    if (tu.uses_eigen()) {
+      data["eigen_headers"] = true;
+    } else {
+      data["eigen_headers"] = false;
+    }
 
     auto temp = environment_.parse_template("module.template");
     environment_.set_trim_blocks(true);

@@ -73,7 +73,6 @@ def main():
     ############################################################################
 
     parser = Parser(input_file)
-    parser.print()
     tu = parser.parse()
 
     module = Module(module_name, [os.path.basename(input_file)])

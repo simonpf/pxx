@@ -40,6 +40,12 @@ set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
 find_package(Python COMPONENTS Interpreter Development)
 
+#
+# Find required packages
+#
+
+find_package(Eigen3)
+
 # Python module binary
 add_subdirectory(src)
 

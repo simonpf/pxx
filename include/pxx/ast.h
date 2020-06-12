@@ -4,13 +4,15 @@
 #include <clang-c/Index.h>
 #include <inja/inja.hpp>
 #include <iostream>
+#include <pxx/utils.h>
 #include <string>
 #include <vector>
-#include <pxx/utils.h>
 
 using json = nlohmann::json;
 
 namespace pxx::ast {
+
+using pxx::to_string;
 
 CXChildVisitResult parse_function(CXCursor c, CXCursor parent,
                                   CXClientData client_data);
@@ -21,63 +23,60 @@ CXChildVisitResult parse_class(CXCursor c, CXCursor parent,
 CXChildVisitResult parse_namespace(CXCursor c, CXCursor parent,
                                    CXClientData client_data);
 
-enum class access_specifier_t {pub, prot, priv};
+enum class access_specifier_t { pub, prot, priv };
 std::string to_string(access_specifier_t as) {
-    switch (as) {
-    case access_specifier_t::pub:
-        return "public";
-    case access_specifier_t::prot:
-        return "protected";
-    case access_specifier_t::priv:
-        return "private";
-    }
-    return "";
+  switch (as) {
+  case access_specifier_t::pub:
+    return "public";
+  case access_specifier_t::prot:
+    return "protected";
+  case access_specifier_t::priv:
+    return "private";
+  }
+  return "";
 }
 
-enum class storage_class_t {ext, stat, none};
+enum class storage_class_t { ext, stat, none };
 std::string to_string(storage_class_t sc) {
-    switch (sc) {
-    case storage_class_t::ext:
-        return "extern";
-    case storage_class_t::stat:
-        return "static";
-    case storage_class_t::none:
-        return "none";
-    }
-    return "";
+  switch (sc) {
+  case storage_class_t::ext:
+    return "extern";
+  case storage_class_t::stat:
+    return "static";
+  case storage_class_t::none:
+    return "none";
+  }
+  return "";
 }
 
 std::string get_name(CXCursor c) {
-    CXString s = clang_getCursorSpelling(c);
-    std::string name = clang_getCString(s);
-    clang_disposeString(s);
-    return name;
+  CXString s = clang_getCursorSpelling(c);
+  return to_string(s);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// CxxObject
+// CxxConstruct
 ////////////////////////////////////////////////////////////////////////////////
 
-class CxxObject {
+class CxxConstruct {
 public:
-CxxObject(CXCursor c) : cursor_(c), name_(pxx::ast::get_name(c)) {}
+  CxxConstruct(CXCursor c) : cursor_(c), name_(pxx::ast::get_name(c)) {}
 
-CxxObject(CXCursor c, const CxxObject &p) : cursor_(c) {
+  CxxConstruct(CXCursor c, const CxxConstruct &p) : cursor_(c) {
     CXString s = clang_getCursorSpelling(c);
-    name_ = clang_getCString(s);
+    name_ = to_string(s);
     std::string parent_name = p.get_qualified_name();
     if (parent_name != "") {
       qualified_name_ = p.get_qualified_name() + "::" + name_;
     } else {
       qualified_name_ = name_;
     }
-    clang_disposeString(s);
   }
 
-    std::string get_name() const { return name_; }
+  std::string get_name() const { return name_; }
   std::string get_qualified_name() const { return qualified_name_; }
 
-  friend std::ostream &operator<<(std::ostream &stream, const CxxObject &cl);
+  friend std::ostream &operator<<(std::ostream &stream, const CxxConstruct &cl);
 
 protected:
   CXCursor cursor_;
@@ -86,34 +85,86 @@ protected:
   bool valid_ = true;
 };
 
+class CxxType {
+public:
+
+  CxxType(CXCursor c)
+      : cursor_(c),
+        type_(clang_getCursorType(c)),
+        canonical_type_(clang_getCanonicalType(clang_getCursorType(c)))
+
+  {
+    is_pointer_ = (type_.kind == CXType_Pointer);
+    is_lvalue_reference_ = (type_.kind == CXType_LValueReference);
+    is_rvalue_reference_ = (type_.kind == CXType_RValueReference);
+    is_const_ = clang_isConstQualifiedType(type_);
+  }
+
+  CxxType(CXType t)
+      : type_(t),
+        canonical_type_(clang_getCanonicalType(t)) {}
+
+  std::string get_type_spelling() const {
+    return to_string(clang_getTypeSpelling(type_));
+  }
+
+  std::string get_canonical_type_spelling() const {
+      return to_string(clang_getTypeSpelling(type_));
+  }
+
+  bool is_const() const { return is_const_; }
+  bool is_pointer() const { return is_pointer_; }
+  bool is_lvalue_reference() const { return is_lvalue_reference_; }
+  bool is_rvalue_reference() const { return is_rvalue_reference_; }
+
+  bool is_eigen_type() const {
+      std::string s = get_canonical_type_spelling();
+      std::cout << "type: " << s << std::endl;
+      return (s.find("Eigen::") != s.npos);
+  }
+
+  friend std::ostream &operator<<(std::ostream &stream, const CxxType &t);
+
+protected:
+  CXCursor cursor_;
+  CXType type_;
+  CXType canonical_type_;
+  bool is_const_;
+  bool is_pointer_;
+  bool is_lvalue_reference_;
+  bool is_rvalue_reference_;
+};
+
+std::ostream &operator<<(std::ostream &stream, const CxxType &t) {
+  stream << t.get_type_spelling() << " (" << t.get_canonical_type_spelling()
+         << ") ";
+  return stream;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Variables
 ////////////////////////////////////////////////////////////////////////////////
 
-class Variable : public CxxObject {
+class Variable : public CxxConstruct {
 public:
-  Variable(CXCursor c, const CxxObject &p) : CxxObject(c, p) {
-    type_ = clang_getCursorType(c);
-    CXString s = clang_getTypeSpelling(type_);
-    type_name_ = clang_getCString(s);
-    clang_disposeString(s);
-    const_ = static_cast<bool>(clang_isConstQualifiedType(type_));
-  }
+  Variable(CXCursor c, const CxxConstruct &p) : CxxConstruct(c, p), type_(c) {}
 
-  std::string get_type_spelling() const { return type_name_; }
+  std::string get_type_spelling() const { return type_.get_type_spelling(); }
+
+  bool is_const() const { return type_.is_const(); }
+  bool is_eigen_type() const { return type_.is_eigen_type(); }
   friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
   friend void to_json(json &j, const Variable &v);
 
 protected:
   std::string type_name_;
-  bool const_;
-  CXType type_;
+  CxxType type_;
 };
 
 void to_json(json &j, const Variable &v) {
   j["name"] = v.name_;
-  j["type_name"] = v.type_name_;
-  j["const"] = v.const_;
+  j["type_name"] = v.type_.get_type_spelling();
+  j["const"] = v.type_.is_const();
 }
 
 std::ostream &operator<<(std::ostream &stream, const Variable &v) {
@@ -123,7 +174,7 @@ std::ostream &operator<<(std::ostream &stream, const Variable &v) {
 
 class MemberVariable : public Variable {
 public:
-  MemberVariable(CXCursor c, const CxxObject &p) : Variable(c, p) {
+  MemberVariable(CXCursor c, const CxxConstruct &p) : Variable(c, p) {
 
     // retrieve access specifier.
     CX_CXXAccessSpecifier as = clang_getCXXAccessSpecifier(c);
@@ -150,13 +201,10 @@ public:
     }
   }
 
-std::string
-get_type_spelling() const {
-  return type_name_;
-}
+  std::string get_type_spelling() const { return type_name_; }
 
-friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
-friend void to_json(json &j, const MemberVariable &v);
+  friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
+  friend void to_json(json &j, const MemberVariable &v);
 
 private:
   access_specifier_t access_specifier_;
@@ -164,33 +212,53 @@ private:
 };
 
 void to_json(json &j, const MemberVariable &v) {
-    j["name"] = v.name_;
-    j["qualified_name"] = v.get_qualified_name();
-    j["type_name"] = v.type_name_;
-    j["access"] = to_string(v.access_specifier_);
-    j["storage"] = to_string(v.storage_class_);
-    j["const"] = v.const_;
+  j["name"] = v.name_;
+  j["qualified_name"] = v.get_qualified_name();
+  j["type_name"] = v.type_name_;
+  j["access"] = to_string(v.access_specifier_);
+  j["storage"] = to_string(v.storage_class_);
+  j["const"] = v.is_const();
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Functions
 ////////////////////////////////////////////////////////////////////////////////
 
-class Function : public CxxObject {
-public:
-  Function(CXCursor c, const CxxObject &p) : CxxObject(c, p) {
-    // Continue AST traversal.
-    clang_visitChildren(cursor_, &parse_function,
+using pxx::print_children;
+using pxx::operator<<;
 
-                        reinterpret_cast<CXClientData>(this));
+class Function : public CxxConstruct {
+public:
+  Function(CXCursor c, const CxxConstruct &p)
+      : CxxConstruct(c, p),
+        result_type_(clang_getResultType(clang_getCursorType(c)))
+  {
+    // Parse parameters.
+    size_t n = clang_Cursor_getNumArguments(c);
+    for (size_t i = 0; i < n; ++i) {
+      add_parameter(clang_Cursor_getArgument(c, i));
+    }
   }
-  void add_parameter(CXCursor c) { parameters_.emplace_back(c, *this); }
+  void add_parameter(CXCursor c) {
+    using pxx::operator<<;
+
+    parameters_.emplace_back(c, *this);
+  }
+
+  bool uses_eigen() const {
+      bool eigen_found = result_type_.is_eigen_type();
+      eigen_found |= std::any_of(parameters_.begin(),
+                                 parameters_.end(),
+                                 [](const Variable &p){ return p.is_eigen_type(); });
+      return eigen_found;
+  }
+
   friend std::ostream &operator<<(std::ostream &stream, const Function &cl);
   friend void to_json(json &j, const Function &f);
 
 private:
   std::vector<Variable> parameters_;
+  CxxType result_type_;
 };
 
 void to_json(json &j, const Function &f) {
@@ -216,9 +284,9 @@ std::ostream &operator<<(std::ostream &stream, const Function &f) {
 // Classes
 ////////////////////////////////////////////////////////////////////////////////
 
-class Class : public CxxObject {
+class Class : public CxxConstruct {
 public:
-  Class(CXCursor c, const CxxObject &p) : CxxObject(c, p) {
+  Class(CXCursor c, const CxxConstruct &p) : CxxConstruct(c, p) {
     // Continue AST traversal.
     clang_visitChildren(cursor_, &parse_class,
                         reinterpret_cast<CXClientData>(this));
@@ -230,6 +298,20 @@ public:
 
   friend std::ostream &operator<<(std::ostream &stream, const Class &cl);
   friend void to_json(json &j, const Class &c);
+
+  bool uses_eigen() const {
+      bool eigen_found = false;
+      eigen_found |= std::any_of(constructors_.begin(),
+                                 constructors_.end(),
+                                 [](const Function &p){ return p.uses_eigen(); });
+      eigen_found |= std::any_of(methods_.begin(),
+                                 methods_.end(),
+                                 [](const Function &p){ return p.uses_eigen(); });
+      eigen_found |= std::any_of(data_members_.begin(),
+                                 data_members_.end(),
+                                 [](const Variable &p){ return p.is_eigen_type(); });
+      return eigen_found;
+  }
 
 private:
   std::vector<Function> constructors_;
@@ -266,15 +348,14 @@ std::ostream &operator<<(std::ostream &stream, const Class &cl) {
 // Namespace
 ////////////////////////////////////////////////////////////////////////////////
 
-class Namespace : public CxxObject {
+class Namespace : public CxxConstruct {
 public:
-
-  Namespace(CXCursor c) : CxxObject(c) {
+  Namespace(CXCursor c) : CxxConstruct(c) {
     clang_visitChildren(cursor_, &parse_namespace,
                         reinterpret_cast<CXClientData>(this));
   }
 
-  Namespace(CXCursor c, const CxxObject &p) : CxxObject(c, p) {
+  Namespace(CXCursor c, const CxxConstruct &p) : CxxConstruct(c, p) {
     clang_visitChildren(cursor_, &parse_namespace,
                         reinterpret_cast<CXClientData>(this));
   }
@@ -282,14 +363,28 @@ public:
   void add_class(CXCursor c) { classes_.emplace_back(c, *this); }
   void add_function(CXCursor c) { functions_.emplace_back(c, *this); }
   void add_namespace(CXCursor c) {
-      std::string name = pxx::ast::get_name(c);
+    std::string name = pxx::ast::get_name(c);
     auto it = namespaces_.find(name);
     if (it != namespaces_.end()) {
       clang_visitChildren(c, &parse_namespace,
                           reinterpret_cast<CXClientData>(&(it->second)));
     } else {
-        namespaces_.insert(std::make_pair(name, Namespace(c, *this)));
+      namespaces_.insert(std::make_pair(name, Namespace(c, *this)));
     }
+  }
+
+  bool uses_eigen() const {
+      bool eigen_found = false;
+      eigen_found |= std::any_of(classes_.begin(),
+                                 classes_.end(),
+                                 [](const Class &c){ return c.uses_eigen(); });
+      eigen_found |= std::any_of(functions_.begin(),
+                                 functions_.end(),
+                                 [](const Function &f){ return f.uses_eigen(); });
+      eigen_found |= std::any_of(namespaces_.begin(),
+                                 namespaces_.end(),
+                                 [](const auto &n){ return n.second.uses_eigen(); });
+      return eigen_found;
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const Namespace &ns);
@@ -310,41 +405,45 @@ void to_json(json &j, const Namespace &ns) {
 }
 
 std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {
-    stream << "A C++ namespace unit." << std::endl << std::endl;
-    stream << "Defined classes:" << std::endl;
-    for (auto &&cl : ns.classes_) {
-        std::cout << std::endl;
-        std::cout << cl;
-    }
-    return stream;
+  stream << "A C++ namespace unit." << std::endl << std::endl;
+  stream << "Defined classes:" << std::endl;
+  for (auto &&cl : ns.classes_) {
+    std::cout << std::endl;
+    std::cout << cl;
+  }
+  return stream;
 }
 
 class TranslationUnit : public Namespace {
 public:
   TranslationUnit(CXCursor c) : Namespace(c) {}
-  friend std::ostream &operator<<(std::ostream &stream, const TranslationUnit &tu);
+  friend std::ostream &operator<<(std::ostream &stream,
+                                  const TranslationUnit &tu);
 
   bool has_standard_headers() {
-      return (namespaces_.find("std") != namespaces_.end());
+    return (namespaces_.find("std") != namespaces_.end());
+  }
+
+  bool has_eigen_headers() {
+    return (namespaces_.find("Eigen") != namespaces_.end());
   }
 };
 
 std::ostream &operator<<(std::ostream &stream, const TranslationUnit &tu) {
-    stream << "A C++ translation unit." << std::endl << std::endl;
-    stream << "Defined classes:" << std::endl;
-    for (auto &&cl : tu.classes_) {
-        std::cout << std::endl;
-        std::cout << cl;
-    }
-    return stream;
+  stream << "A C++ translation unit." << std::endl << std::endl;
+  stream << "Defined classes:" << std::endl;
+  for (auto &&cl : tu.classes_) {
+    std::cout << std::endl;
+    std::cout << cl;
+  }
+  return stream;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Translation Unit
 ////////////////////////////////////////////////////////////////////////////////
 
-CXChildVisitResult parse_namespace(CXCursor c,
-                                   CXCursor /*parent*/,
+CXChildVisitResult parse_namespace(CXCursor c, CXCursor /*parent*/,
                                    CXClientData client_data) {
   Namespace *ns = reinterpret_cast<Namespace *>(client_data);
   CXCursorKind k = clang_getCursorKind(c);
@@ -353,10 +452,10 @@ CXChildVisitResult parse_namespace(CXCursor c,
     ns->add_class(c);
   } break;
   case CXCursor_FunctionDecl: {
-      ns->add_function(c);
+    ns->add_function(c);
   } break;
   case CXCursor_Namespace: {
-      ns->add_namespace(c);
+    ns->add_namespace(c);
   } break;
   default:
     break;
@@ -364,8 +463,7 @@ CXChildVisitResult parse_namespace(CXCursor c,
   return CXChildVisit_Continue;
 }
 
-CXChildVisitResult parse_class(CXCursor c,
-                               CXCursor /*parent*/,
+CXChildVisitResult parse_class(CXCursor c, CXCursor /*parent*/,
                                CXClientData client_data) {
   Class *cl = reinterpret_cast<Class *>(client_data);
   CXCursorKind k = clang_getCursorKind(c);
@@ -385,8 +483,7 @@ CXChildVisitResult parse_class(CXCursor c,
   return CXChildVisit_Continue;
 }
 
-CXChildVisitResult parse_function(CXCursor c,
-                                  CXCursor /*parent*/,
+CXChildVisitResult parse_function(CXCursor c, CXCursor /*parent*/,
                                   CXClientData client_data) {
   Function *f = reinterpret_cast<Function *>(client_data);
   CXCursorKind k = clang_getCursorKind(c);
@@ -402,4 +499,3 @@ CXChildVisitResult parse_function(CXCursor c,
 } // namespace pxx::ast
 
 #endif
-

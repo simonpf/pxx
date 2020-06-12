@@ -7,6 +7,8 @@
 
 namespace pxx {
 
+
+
 std::ostream &operator<<(std::ostream &stream, const CXString &s) {
   stream << clang_getCString(s);
   clang_disposeString(s);
@@ -25,6 +27,23 @@ std::ostream &operator<<(std::ostream &stream, const CXCursorKind &k) {
 
 CXCursorKind kind(CXCursor c) {
     return clang_getCursorKind(c);
+}
+
+void print_children(CXCursor c) {
+    clang_visitChildren(c,
+                        [](CXCursor c, CXCursor /*parent*/, CXClientData /*client_data*/)
+                        {
+                            std::cout << "Cursor '" << clang_getCursorSpelling(c) << "' of kind '"
+                                      << clang_getCursorKindSpelling(clang_getCursorKind(c)) << "'\n";
+                            return CXChildVisit_Recurse;
+                        },
+                        nullptr);
+}
+
+std::string to_string(CXString clang_string) {
+    std::string s = clang_getCString(clang_string);
+    clang_disposeString(clang_string);
+    return s;
 }
 
 } // namespace pxx
