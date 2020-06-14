@@ -32,7 +32,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Ofast")
 # Add custom modules.
 #
 
-set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/find_clang" ${CMAKE_MODULE_PATH})
+include(cmake/pxx.cmake)
 
 #
 # Libraries.

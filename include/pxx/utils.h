@@ -41,9 +41,13 @@ void print_children(CXCursor c) {
 }
 
 std::string to_string(CXString clang_string) {
-    std::string s = clang_getCString(clang_string);
-    clang_disposeString(clang_string);
-    return s;
+  auto sp = clang_getCString(clang_string);
+  std::string s("");
+  if (sp) {
+    s = std::string(sp);
+  }
+  clang_disposeString(clang_string);
+  return s;
 }
 
 } // namespace pxx

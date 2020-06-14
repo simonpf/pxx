@@ -6,6 +6,7 @@
 #include <iostream>
 #include <pxx/utils.h>
 #include <string>
+#include <sstream>
 #include <vector>
 
 using json = nlohmann::json;
@@ -50,9 +51,66 @@ std::string to_string(storage_class_t sc) {
 }
 
 std::string get_name(CXCursor c) {
-  CXString s = clang_getCursorSpelling(c);
-  return to_string(s);
+    CXString s = clang_getCursorSpelling(c);
+    return to_string(s);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Export settings asd parser
+////////////////////////////////////////////////////////////////////////////////
+
+struct ExportSettings {
+  bool include = false;
+};
+
+std::ostream &operator<<(std::ostream &stream, ExportSettings settings) {
+  stream << "Export settings :: ";
+  stream << "include =" << settings.include;
+  stream << std::endl;
+  return stream;
+}
+
+struct CommentParser {
+public:
+  CommentParser(std::string comment,
+                ExportSettings default_settings = ExportSettings())
+      : settings(default_settings) {
+    parse_comment(comment);
+  }
+
+  void parse_comment(std::string comment) {
+    std::istringstream s(comment);
+    std::string l;
+    // Read lines in comment.
+    while (std::getline(s, l)) {
+      if ((l[0] != '/') or (l[1] != '/')) {
+        continue;
+      } else {
+        l = l.substr(2);
+        std::istringstream ls(l);
+
+        std::string item;
+
+        // Check is this is a pxx comment.
+        if ((ls >> item) && (item != "pxx")) {
+          continue;
+        }
+        if ((ls >> item) && (item != "::")) {
+          continue;
+        }
+
+        while (ls >> item) {
+          if (item == "include") {
+            settings.include = true;
+          }
+        }
+      }
+    }
+  }
+
+  ExportSettings settings;
+  std::map<int, std::string> warnings;
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // CxxConstruct
@@ -60,7 +118,8 @@ std::string get_name(CXCursor c) {
 
 class CxxConstruct {
 public:
-  CxxConstruct(CXCursor c) : cursor_(c), name_(pxx::ast::get_name(c)) {}
+  CxxConstruct(CXCursor c, ExportSettings s = ExportSettings())
+      : cursor_(c), settings_(s), name_(pxx::ast::get_name(c)) {}
 
   CxxConstruct(CXCursor c, const CxxConstruct &p) : cursor_(c) {
     CXString s = clang_getCursorSpelling(c);
@@ -71,15 +130,25 @@ public:
     } else {
       qualified_name_ = name_;
     }
+
+    settings_ = p.get_export_settings();
+    if (clang_isDeclaration(clang_getCursorKind(c))) {
+      auto s = to_string(clang_Cursor_getRawCommentText(c));
+      CommentParser cp(s);
+      settings_ = cp.settings;
+    }
   }
 
   std::string get_name() const { return name_; }
   std::string get_qualified_name() const { return qualified_name_; }
 
+  ExportSettings get_export_settings() const { return settings_; }
+
   friend std::ostream &operator<<(std::ostream &stream, const CxxConstruct &cl);
 
 protected:
   CXCursor cursor_;
+  ExportSettings settings_;
   std::string name_;
   std::string qualified_name_;
   bool valid_ = true;
@@ -87,10 +156,8 @@ protected:
 
 class CxxType {
 public:
-
   CxxType(CXCursor c)
-      : cursor_(c),
-        type_(clang_getCursorType(c)),
+      : cursor_(c), type_(clang_getCursorType(c)),
         canonical_type_(clang_getCanonicalType(clang_getCursorType(c)))
 
   {
@@ -100,16 +167,14 @@ public:
     is_const_ = clang_isConstQualifiedType(type_);
   }
 
-  CxxType(CXType t)
-      : type_(t),
-        canonical_type_(clang_getCanonicalType(t)) {}
+  CxxType(CXType t) : type_(t), canonical_type_(clang_getCanonicalType(t)) {}
 
   std::string get_type_spelling() const {
     return to_string(clang_getTypeSpelling(type_));
   }
 
   std::string get_canonical_type_spelling() const {
-      return to_string(clang_getTypeSpelling(type_));
+    return to_string(clang_getTypeSpelling(type_));
   }
 
   bool is_const() const { return is_const_; }
@@ -118,9 +183,9 @@ public:
   bool is_rvalue_reference() const { return is_rvalue_reference_; }
 
   bool is_eigen_type() const {
-      std::string s = get_canonical_type_spelling();
-      std::cout << "type: " << s << std::endl;
-      return (s.find("Eigen::") != s.npos);
+    std::string s = get_canonical_type_spelling();
+    std::cout << "type: " << s << std::endl;
+    return (s.find("Eigen::") != s.npos);
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const CxxType &t);
@@ -350,7 +415,7 @@ std::ostream &operator<<(std::ostream &stream, const Class &cl) {
 
 class Namespace : public CxxConstruct {
 public:
-  Namespace(CXCursor c) : CxxConstruct(c) {
+Namespace(CXCursor c, ExportSettings s = ExportSettings()) : CxxConstruct(c, s) {
     clang_visitChildren(cursor_, &parse_namespace,
                         reinterpret_cast<CXClientData>(this));
   }
@@ -416,7 +481,8 @@ std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {
 
 class TranslationUnit : public Namespace {
 public:
-  TranslationUnit(CXCursor c) : Namespace(c) {}
+  TranslationUnit(CXCursor c, ExportSettings s = ExportSettings())
+      : Namespace(c, s) {}
   friend std::ostream &operator<<(std::ostream &stream,
                                   const TranslationUnit &tu);
 

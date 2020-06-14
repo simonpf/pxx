@@ -72,7 +72,8 @@ def main():
     # Command line arguments
     ############################################################################
 
-    parser = Parser(input_file)
+    print("Other args:", other_args)
+    parser = Parser(input_file, other_args)
     tu = parser.parse()
 
     module = Module(module_name, [os.path.basename(input_file)])
