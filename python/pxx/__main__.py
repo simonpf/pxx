@@ -72,8 +72,9 @@ def main():
     # Command line arguments
     ############################################################################
 
-    print("Other args:", other_args)
-    parser = Parser(input_file, other_args)
+    include_path = os.path.join(os.path.dirname(__file__), "include")
+
+    parser = Parser(input_file, [f"-I{include_path}"] + other_args)
     tu = parser.parse()
 
     module = Module(module_name, [os.path.basename(input_file)])

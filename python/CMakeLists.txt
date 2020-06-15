@@ -22,3 +22,13 @@ add_custom_target(pxx_python
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   DEPENDS pxx pxx/__init__.py pxx/__main__.py
   COMMENT "Building pxx Python package.")
+
+find_package(LibClang)
+string(REGEX REPLACE "\n$" "" VERSION "${VERSION}")
+file(GLOB_RECURSE clang_headers "${LIBCLANG_BUILTIN_DIR}/*h")
+
+foreach(file ${clang_headers})
+  file(RELATIVE_PATH output_file ${LIBCLANG_BUILTIN_DIR} ${file})
+  configure_file(${file} pxx/include/${output_file})
+endforeach(file IN ${clang_headers})
+

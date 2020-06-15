@@ -34,7 +34,6 @@ public:
     } else {
       data["standard_headers"] = false;
     }
-    std::cout << "eign: " << tu.uses_eigen() << std::endl;
     if (tu.uses_eigen()) {
       data["eigen_headers"] = true;
     } else {

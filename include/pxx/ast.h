@@ -60,12 +60,12 @@ std::string get_name(CXCursor c) {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct ExportSettings {
-  bool include = false;
+  bool exp = false;
 };
 
 std::ostream &operator<<(std::ostream &stream, ExportSettings settings) {
   stream << "Export settings :: ";
-  stream << "include =" << settings.include;
+  stream << "export =" << settings.exp;
   stream << std::endl;
   return stream;
 }
@@ -100,8 +100,8 @@ public:
         }
 
         while (ls >> item) {
-          if (item == "include") {
-            settings.include = true;
+          if (item == "export") {
+            settings.exp = true;
           }
         }
       }
@@ -134,7 +134,7 @@ public:
     settings_ = p.get_export_settings();
     if (clang_isDeclaration(clang_getCursorKind(c))) {
       auto s = to_string(clang_Cursor_getRawCommentText(c));
-      CommentParser cp(s);
+      CommentParser cp(s, settings_);
       settings_ = cp.settings;
     }
   }
@@ -184,7 +184,6 @@ public:
 
   bool is_eigen_type() const {
     std::string s = get_canonical_type_spelling();
-    std::cout << "type: " << s << std::endl;
     return (s.find("Eigen::") != s.npos);
   }
 
@@ -341,7 +340,7 @@ std::ostream &operator<<(std::ostream &stream, const Function &f) {
       stream << ", ";
     }
   }
-  stream << ")" << std::endl;
+  stream << ") exported = "  << f.get_export_settings().exp << std::endl;
   return stream;
 }
 
@@ -378,6 +377,33 @@ public:
       return eigen_found;
   }
 
+  std::vector<Function> get_exported_methods() const {
+      std::vector<Function> exports;
+      std::copy_if (methods_.begin(),
+                    methods_.end(),
+                    std::back_inserter(exports),
+                    [](const Function &f){return f.get_export_settings().exp;});
+      return exports;
+  }
+
+  std::vector<Function> get_exported_constructors() const {
+      std::vector<Function> exports;
+      std::copy_if (constructors_.begin(),
+                    constructors_.end(),
+                    std::back_inserter(exports),
+                    [](const Function &f){return f.get_export_settings().exp;});
+      return exports;
+  }
+
+  std::vector<MemberVariable> get_exported_variables() const {
+      std::vector<MemberVariable> exports;
+      std::copy_if (data_members_.begin(),
+                    data_members_.end(),
+                    std::back_inserter(exports),
+                    [](const MemberVariable &v){return v.get_export_settings().exp;});
+      return exports;
+  }
+
 private:
   std::vector<Function> constructors_;
   std::vector<Function> methods_;
@@ -406,6 +432,8 @@ std::ostream &operator<<(std::ostream &stream, const Class &cl) {
   for (auto &&v : cl.data_members_) {
     stream << "\t" << v;
   }
+
+  stream << "\t" << "Exported: " << cl.settings_.exp << std::endl;
   return stream;
 }
 
@@ -457,6 +485,24 @@ Namespace(CXCursor c, ExportSettings s = ExportSettings()) : CxxConstruct(c, s) 
 
   void print() { std::cout << *this << std::endl; }
 
+  std::vector<Function> get_exported_functions() const {
+      std::vector<Function> exports;
+      std::copy_if (functions_.begin(),
+                    functions_.end(),
+                    std::back_inserter(exports),
+                    [](const Function &f){return f.get_export_settings().exp;});
+      return exports;
+  }
+
+  std::vector<Class> get_exported_classes() const {
+      std::vector<Class> exports;
+      std::copy_if (classes_.begin(),
+                    classes_.end(),
+                    std::back_inserter(exports),
+                    [](const Class &c){return c.get_export_settings().exp;});
+      return exports;
+  }
+
 protected:
   std::vector<Class> classes_;
   std::vector<Function> functions_;
@@ -464,17 +510,22 @@ protected:
 };
 
 void to_json(json &j, const Namespace &ns) {
-  j["classes"] = ns.classes_;
-  j["functions"] = ns.functions_;
+  j["classes"] = ns.get_exported_classes();
+  j["functions"] = ns.get_exported_functions();
   j["namespaces"] = ns.namespaces_;
 }
 
 std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {
-  stream << "A C++ namespace unit." << std::endl << std::endl;
+  stream << "A C++ namespace: " << ns.get_qualified_name() << std::endl << std::endl;
   stream << "Defined classes:" << std::endl;
-  for (auto &&cl : ns.classes_) {
+  for (auto &&cl : ns.get_exported_classes()) {
     std::cout << std::endl;
     std::cout << cl;
+  }
+  stream << "Defined functions:" << std::endl;
+  for (auto &&f : ns.get_exported_functions()) {
+      std::cout << std::endl;
+      std::cout << f;
   }
   return stream;
 }
@@ -496,11 +547,21 @@ public:
 };
 
 std::ostream &operator<<(std::ostream &stream, const TranslationUnit &tu) {
-  stream << "A C++ translation unit." << std::endl << std::endl;
+  stream << "A C++ translation unit:" << tu.name_ << std::endl << std::endl;
+  stream << "Defined functions:" << std::endl;
+  for (auto &&f : tu.get_exported_functions()) {
+      std::cout << std::endl;
+      std::cout << f;
+  }
   stream << "Defined classes:" << std::endl;
-  for (auto &&cl : tu.classes_) {
+  for (auto &&cl : tu.get_exported_classes()) {
     std::cout << std::endl;
     std::cout << cl;
+  }
+  stream << "Defined namespaces:" << std::endl;
+  for (auto &&n : tu.namespaces_) {
+      std::cout << std::endl;
+      std::cout << n.second;
   }
   return stream;
 }
@@ -509,7 +570,8 @@ std::ostream &operator<<(std::ostream &stream, const TranslationUnit &tu) {
 // Translation Unit
 ////////////////////////////////////////////////////////////////////////////////
 
-CXChildVisitResult parse_namespace(CXCursor c, CXCursor /*parent*/,
+CXChildVisitResult parse_namespace(CXCursor c,
+                                   CXCursor /*parent*/,
                                    CXClientData client_data) {
   Namespace *ns = reinterpret_cast<Namespace *>(client_data);
   CXCursorKind k = clang_getCursorKind(c);

@@ -5,10 +5,12 @@
 #include <pxx/python.h>
 
 namespace py = pybind11;
+using namespace pybind11::literals;
 
 PYBIND11_MODULE(_pxx, m) {
     py::class_<pxx::Parser>(m, "Parser")
-        .def(py::init<const std::string &>())
+        .def(py::init<const std::string &, std::vector<std::string>>(),
+             "filename"_a, py::arg("command_line_args") = std::vector<std::string>{})
         .def("print", &pxx::Parser::print)
         .def("parse", &pxx::Parser::parse);
     py::class_<pxx::ast::TranslationUnit>(m, "TranslationUnit")

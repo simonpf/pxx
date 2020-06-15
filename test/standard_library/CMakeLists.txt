@@ -8,8 +8,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 set(input_file ${CMAKE_CURRENT_SOURCE_DIR}/vector.h)
 set(output_file ${CMAKE_CURRENT_BINARY_DIR}/standard_vector.cxx)
 set(pxx_source_files CACHE INTERNAL "The PXX source files")
-message(WARNING input_file: ${input_file})
-message(WARNING output_file: ${output_file})
 add_custom_command(
   OUTPUT ${output_file}
   COMMAND ${Python_EXECUTABLE} -m pxx ${input_file} --output_file ${output_file}

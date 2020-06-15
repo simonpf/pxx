@@ -12,7 +12,9 @@ class Parser {
 public:
   Parser(std::string filename,
          std::vector<std::string> additional_args = {}) {
-    std::vector<const char *> command_line_args = {"-x", "c++",
+    std::vector<const char *> command_line_args = {"-x",
+                                                   "c++",
+                                                   "-std=c++11",
                                                    "-fparse-all-comments"};
     for (auto & s : additional_args) {
       command_line_args.push_back(s.c_str());
@@ -20,7 +22,11 @@ public:
     index_ = clang_createIndex(0, 0);
     unit_ =
         clang_parseTranslationUnit(index_, filename.c_str(), command_line_args.data(),
-                                   3, nullptr, 0, CXTranslationUnit_None);
+                                   command_line_args.size(), nullptr, 0, CXTranslationUnit_None);
+    for (size_t i = 0; i < clang_getNumDiagnostics(unit_); ++i) {
+        std::cout << "Warning encountered during parsing of translation unit:" << std::endl;
+        std::cout << clang_getDiagnostic(unit_, i) << std::endl;
+    }
     if (unit_ == nullptr) {
       throw std::runtime_error("Failed to parse the translation unit.");
     }

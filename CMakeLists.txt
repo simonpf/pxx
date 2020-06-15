@@ -39,6 +39,7 @@ include(cmake/pxx.cmake)
 # Libraries.
 #
 
+find_package(LibClang)
 find_package(Python COMPONENTS Interpreter Development)
 
 #

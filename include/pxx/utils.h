@@ -25,6 +25,11 @@ std::ostream &operator<<(std::ostream &stream, const CXCursorKind &k) {
     return stream;
 }
 
+std::ostream &operator<<(std::ostream &stream, const CXDiagnostic &k) {
+    stream << clang_getDiagnosticSpelling(k);
+    return stream;
+}
+
 CXCursorKind kind(CXCursor c) {
     return clang_getCursorKind(c);
 }
@@ -35,7 +40,7 @@ void print_children(CXCursor c) {
                         {
                             std::cout << "Cursor '" << clang_getCursorSpelling(c) << "' of kind '"
                                       << clang_getCursorKindSpelling(clang_getCursorKind(c)) << "'\n";
-                            return CXChildVisit_Recurse;
+                            return CXChildVisit_Continue;
                         },
                         nullptr);
 }

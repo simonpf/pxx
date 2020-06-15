@@ -18,6 +18,8 @@
 #   version number as a string
 # ``LIBCLANG_CXXFLAGS``
 #   the compiler flags for files that include LLVM headers
+# ``LIBCLANG_BUILTIN_DIR``
+#   the directory containing the clang builtin headers.
 #
 #=============================================================================
 # Copyright (C) 2011, 2012, 2013 Jan Erik Hanssen and Anders Bakken
@@ -37,6 +39,11 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with RTags.  If not, see <https://www.gnu.org/licenses/>.
+#=============================================================================
+# Copyright (C) 2020 Simon Pfreundschuh
+#
+# Added
+
 
 if (NOT LIBCLANG_ROOT_DIR)
     set(LIBCLANG_ROOT_DIR $ENV{LIBCLANG_ROOT_DIR})
@@ -132,6 +139,10 @@ else ()
     set(LIBCLANG_VERSION_STRING "Unknown")
 endif ()
 message("-- Using Clang version ${LIBCLANG_VERSION_STRING} from ${LIBCLANG_LIBDIR} with CXXFLAGS ${LIBCLANG_CXXFLAGS}")
+
+
+execute_process(COMMAND ${LIBCLANG_LLVM_CONFIG_EXECUTABLE} --bindir OUTPUT_VARIABLE LIBCLANG_BIN_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(LIBCLANG_BUILTIN_DIR "${LIBCLANG_BIN_DIR}/../lib/clang/${LIBCLANG_VERSION_STRING}/include")
 
 # Handly the QUIETLY and REQUIRED arguments and set LIBCLANG_FOUND to TRUE if all listed variables are TRUE
 include(FindPackageHandleStandardArgs)
