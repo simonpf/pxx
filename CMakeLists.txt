@@ -63,3 +63,5 @@ set(pxx_source_files "")
 list(APPEND pxx_source_files ${pxx_headers})
 list(APPEND pxx_source_files ${pxx_templates})
 set(pxx_source_files ${pxx_source_files} CACHE INTERNAL "The PXX source files" FORCE)
+
+add_subdirectory(cmake)

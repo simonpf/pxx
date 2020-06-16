@@ -510,9 +510,17 @@ protected:
 };
 
 void to_json(json &j, const Namespace &ns) {
-  j["classes"] = ns.get_exported_classes();
-  j["functions"] = ns.get_exported_functions();
-  j["namespaces"] = ns.namespaces_;
+  auto classes = ns.get_exported_classes();
+  auto functions = ns.get_exported_functions();
+  for(auto &&n : ns.namespaces_) {
+      auto nested_classes = n.second.get_exported_classes();
+      classes.insert(classes.end(), nested_classes.begin(), nested_classes.end());
+      auto nested_functions = n.second.get_exported_functions();
+      functions.insert(functions.end(), nested_functions.begin(), nested_functions.end());
+  }
+
+  j["classes"] = classes;
+  j["functions"] = functions;
 }
 
 std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {

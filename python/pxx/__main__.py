@@ -32,11 +32,11 @@ def main():
                         metavar="name",
                         help="Python module name use for the top-level "
                         "namespace.")
-
     parser.add_argument("--output_file",
                         nargs=1,
                         metavar=("<output_file>",),
                         help="File to write the module code to.")
+
     args, other_args = parser.parse_known_args()
     input_file = args.input_file[0]
     classes = args.classes
@@ -72,7 +72,7 @@ def main():
     # Command line arguments
     ############################################################################
 
-    include_path = os.path.join(os.path.dirname(__file__), "include")
+    include_path = os.path.join(os.path.dirname(__file__), "include", "clang")
 
     parser = Parser(input_file, [f"-I{include_path}"] + other_args)
     tu = parser.parse()

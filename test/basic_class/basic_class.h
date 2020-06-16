@@ -1,3 +1,4 @@
+// pxx :: export
 class TestClass {
 public:
   TestClass(){};
