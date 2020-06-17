@@ -496,6 +496,10 @@ Namespace(CXCursor c, ExportSettings s = ExportSettings()) : CxxConstruct(c, s) 
                     functions_.end(),
                     std::back_inserter(exports),
                     [](const Function &f){return f.get_export_settings().exp;});
+      for(auto &&n : namespaces_) {
+          auto nested_functions = n.second.get_exported_functions();
+          exports.insert(exports.end(), nested_functions.begin(), nested_functions.end());
+      }
       return exports;
   }
 
@@ -505,6 +509,10 @@ Namespace(CXCursor c, ExportSettings s = ExportSettings()) : CxxConstruct(c, s) 
                     classes_.end(),
                     std::back_inserter(exports),
                     [](const Class &c){return c.get_export_settings().exp;});
+      for(auto &&n : namespaces_) {
+          auto nested_classes = n.second.get_exported_classes();
+          exports.insert(exports.end(), nested_classes.begin(), nested_classes.end());
+      }
       return exports;
   }
 
@@ -517,12 +525,6 @@ protected:
 void to_json(json &j, const Namespace &ns) {
   auto classes = ns.get_exported_classes();
   auto functions = ns.get_exported_functions();
-  for(auto &&n : ns.namespaces_) {
-      auto nested_classes = n.second.get_exported_classes();
-      classes.insert(classes.end(), nested_classes.begin(), nested_classes.end());
-      auto nested_functions = n.second.get_exported_functions();
-      functions.insert(functions.end(), nested_functions.begin(), nested_functions.end());
-  }
 
   j["classes"] = classes;
   j["functions"] = functions;
