@@ -199,6 +199,10 @@ protected:
   bool is_rvalue_reference_;
 };
 
+void to_json(json &j, const CxxType &t) {
+    j["name"] = t.get_type_spelling();
+}
+
 std::ostream &operator<<(std::ostream &stream, const CxxType &t) {
   stream << t.get_type_spelling() << " (" << t.get_canonical_type_spelling()
          << ") ";
@@ -329,6 +333,7 @@ void to_json(json &j, const Function &f) {
   j["name"] = f.get_name();
   j["qualified_name"] = f.get_qualified_name();
   j["parameters"] = f.parameters_;
+  j["result_type"] = f.result_type_;
 }
 
 std::ostream &operator<<(std::ostream &stream, const Function &f) {

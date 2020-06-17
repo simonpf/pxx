@@ -9,7 +9,7 @@
   // Class methods
 {% endif %}
 {% for m in class.methods %}
-  .def("{{ m.name }}", &{{ m.qualified_name }})
+  .def("{{ m.name }}", ({{ m.result_type.name }}({{ class.qualified_name }}::*)({% for p in m.parameters %} {{ p.type_name }} {% if loop.index1 < length(m.parameters) %} , {% endif %} {% endfor %})) &{{ m.qualified_name }})
 {% endfor %}
 {#--------------------------------------------------------------------------#}
 {% if length(class.data_members) > 0 %}
