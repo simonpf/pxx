@@ -35,9 +35,19 @@ macro(add_pxx_module)
 
   execute_process(
     COMMAND ${Python_EXECUTABLE} -c "import pxx, os; print(os.path.dirname(pxx.__file__))"
+    RESULT_VARIABLE pxx_python_success
+    ERROR_VARIABLE pxx_python_error
     OUTPUT_VARIABLE pxx_include_path
     OUTPUT_STRIP_TRAILING_WHITESPACE
     )
+
+  if (${pxx_python_success})
+    if (${CMAKE_PROJECT_NAME} STREQUAL "pxx")
+      set(pxx_include_path "${PROJECT_BINARY_DIR}/python/pxx")
+    else(${CMAKE_PROJECT_NAME} STREQUAL "pxx")
+      message(ERROR "Could not find pxx package. Please verify that pxx Python package is correctly installed.")
+    endif(${CMAKE_PROJECT_NAME} STREQUAL "pxx")
+  endif(${pxx_python_success})
 
   get_filename_component(input_folder ${input_file} DIRECTORY)
 

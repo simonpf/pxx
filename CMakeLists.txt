@@ -33,7 +33,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Ofast")
 #
 
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/find_clang" ${CMAKE_MODULE_PATH})
-include(cmake/pxx.cmake)
+include(cmake/pxx-config.cmake)
 
 #
 # Libraries.
