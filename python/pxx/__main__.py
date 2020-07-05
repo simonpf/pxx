@@ -22,6 +22,10 @@ def main():
                         metavar=("<input_file>",),
                         help="The C++ file containing the classes for which to "
                         " generate the interface.")
+    parser.add_argument("--dump_ast",
+                        action='store_true',
+                        help="If provided, pxx only dumps the AST of the parsed"
+                        " translation unit.")
     parser.add_argument("--classes",
                         nargs="*",
                         metavar="Class1, ...",
@@ -76,6 +80,12 @@ def main():
 
     parser = Parser(input_file, [f"-I{include_path}"] + other_args)
     tu = parser.parse()
+
+    # Only dumping AST.
+    if args.dump_ast:
+        print(f"\n### CXX Translation Unit: {input_file} ###\n")
+        tu.dump_ast()
+        return 0
 
     module = Module(module_name, [os.path.basename(input_file)])
     s = module.render(tu)

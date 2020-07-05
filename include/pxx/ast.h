@@ -13,6 +13,30 @@ using json = nlohmann::json;
 
 namespace pxx::ast {
 
+namespace detail {
+    struct AstFormatter {
+    AstFormatter(size_t level = 0) : level_(level) {}
+
+        void print(CXCursor c) {
+            std::cout << std::setw(level_ * 4) << " " << " + ";
+            std::cout << clang_getCursorKindSpelling(clang_getCursorKind(c));
+            std::cout << " : " << clang_getCursorSpelling(c) << std::endl;
+        }
+
+        static CXChildVisitResult traverse(CXCursor c, CXCursor /*p*/, CXClientData d) {
+            AstFormatter *formatter = reinterpret_cast<AstFormatter *>(d);
+            formatter->print(c);
+            formatter->level_++;
+            clang_visitChildren(c, traverse, d);
+            formatter->level_--;
+            return CXChildVisit_Continue;
+        }
+
+        size_t level_ = 0;
+    };
+
+}  // namespace detail
+
 using pxx::to_string;
 
 CXChildVisitResult parse_function(CXCursor c, CXCursor parent,
@@ -558,6 +582,11 @@ public:
 
   bool has_eigen_headers() {
     return (namespaces_.find("Eigen") != namespaces_.end());
+  }
+
+  void dump_ast() {
+      detail::AstFormatter ast_formatter{};
+      clang_visitChildren(cursor_, detail::AstFormatter::traverse, &ast_formatter);
   }
 };
 

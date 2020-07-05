@@ -11,10 +11,10 @@ PYBIND11_MODULE(_pxx, m) {
     py::class_<pxx::Parser>(m, "Parser")
         .def(py::init<const std::string &, std::vector<std::string>>(),
              "filename"_a, py::arg("command_line_args") = std::vector<std::string>{})
-        .def("print", &pxx::Parser::print)
         .def("parse", &pxx::Parser::parse);
     py::class_<pxx::ast::TranslationUnit>(m, "TranslationUnit")
-        .def("print", &pxx::ast::TranslationUnit::print);
+        .def("print", &pxx::ast::TranslationUnit::print)
+        .def("dump_ast", &pxx::ast::TranslationUnit::dump_ast);
     py::class_<pxx::python::Module>(m, "Module")
         .def(py::init<std::string, std::vector<std::string>>())
         .def("render", &pxx::python::Module::render);

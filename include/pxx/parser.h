@@ -4,6 +4,7 @@
 #include <clang-c/Index.h>
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <pxx/ast.h>
 
 namespace pxx {
@@ -30,19 +31,6 @@ public:
     if (unit_ == nullptr) {
       throw std::runtime_error("Failed to parse the translation unit.");
     }
-  }
-
-  void print() {
-    CXCursor cursor = clang_getTranslationUnitCursor(unit_);
-    clang_visitChildren(
-        cursor,
-        [](CXCursor c, CXCursor /*parent*/, CXClientData /*client_data*/) {
-          std::cout << "Cursor '" << clang_getCursorSpelling(c) << "' of kind '"
-                    << clang_getCursorKindSpelling(clang_getCursorKind(c))
-                    << "'\n";
-          return CXChildVisit_Recurse;
-        },
-        nullptr);
   }
 
   ast::TranslationUnit parse() {
