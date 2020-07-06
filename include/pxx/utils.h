@@ -7,8 +7,6 @@
 
 namespace pxx {
 
-
-
 std::ostream &operator<<(std::ostream &stream, const CXString &s) {
   stream << clang_getCString(s);
   clang_disposeString(s);

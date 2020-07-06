@@ -85,6 +85,7 @@ def main():
     if args.dump_ast:
         print(f"\n### CXX Translation Unit: {input_file} ###\n")
         tu.dump_ast()
+        tu.print()
         return 0
 
     module = Module(module_name, [os.path.basename(input_file)])

@@ -1,13 +1,11 @@
 #define PY_SSIZE_T_CLEAN
 #include <pybind11/pybind11.h>
-
-{% if standard_headers %}
+## if standard_headers
 #include <pybind11/stl.h>
-{% endif %}
-{% if eigen_headers %}
+## endif
+## if eigen_headers
 #include <pybind11/eigen.h>
-{% endif %}
-
+## endif 
 ## for include in includes
 #include <{{ include }}>
 ## endfor
@@ -21,5 +19,9 @@ PYBIND11_MODULE({{ module_name }}, m) {
 
 {% for function in functions %}
 m.def("{{ function.name }}", &{{ function.name}} );
+{% endfor %}
+
+{% for f in function_template_instances %}
+{% include "function_template_instance.template" %}
 {% endfor %}
 }
