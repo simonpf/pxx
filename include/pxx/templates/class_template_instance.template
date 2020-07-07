@@ -1,4 +1,4 @@
-  py::class_<{{ class.qualified_name }}>(m, "{{ class.name }}")
+py::class_<{{ class.qualified_name }}>(m, "{{ class.export_name }}")
 {#--------------------------------------------------------------------------#}
   // Constructors
   {% for c in class.constructors %}
@@ -9,7 +9,7 @@
   // Class methods
 {% endif %}
 {% for m in class.methods %}
-  .def("{{ m.name }}", ({{ m.result_type.name }}({{ class.qualified_name }}::*)({% for p in m.parameters %} {{ p.typename }} {% if loop.index1 < length(m.parameters) %} , {% endif %} {% endfor %})) &{{ m.qualified_name }})
+  .def("{{ m.name }}", ({{ m.result_type.name }}({{ class.qualified_name }}::*)({% for p in m.parameters %} {{ p.typename }} {% if loop.index1 < length(m.parameters) %} , {% endif %} {% endfor %})) &{{ class.qualified_name }}::{{ m.name }})
 {% endfor %}
 {#--------------------------------------------------------------------------#}
 {% if length(class.data_members) > 0 %}
@@ -18,9 +18,9 @@
 {% for m in class.data_members %}
 {% if m.access == "public" %}
 {% if m.const %}
-  .def_readonly("{{ m.name }}", &{{ m.qualified_name }})
+  .def_readonly("{{ m.name }}", &{{ class.qualified_name}}::{{ m.qualified_name }})
 {% else %}
-  .def_readwrite("{{ m.name }}", &{{ m.qualified_name }})
+  .def_readwrite("{{ m.name }}", &{{ class.qualified_name }}::{{ m.name }})
 {% endif %}
 {% endif %}
 {% endfor %};

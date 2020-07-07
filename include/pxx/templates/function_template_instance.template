@@ -1,1 +1,1 @@
-m.def("{{ f.export_name }}", &{{ f.qualified_name }}<{% for ta in f.template_arguments %}{{ ta }}{% if loop.index1 < length(f.template_arguments) %}, {% endif %}{% endfor %}>);
+m.def("{{ f.export_name }}", &{{ f.name }});

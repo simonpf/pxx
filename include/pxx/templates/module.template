@@ -24,4 +24,8 @@ m.def("{{ function.name }}", &{{ function.name}} );
 {% for f in function_template_instances %}
 {% include "function_template_instance.template" %}
 {% endfor %}
+
+{% for class in class_template_instances %}
+{% include "class_template_instance.template" %}
+{% endfor %}
 }

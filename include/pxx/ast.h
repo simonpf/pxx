@@ -52,8 +52,8 @@ using pxx::to_string;
 
 CXChildVisitResult parse_function(CXCursor c, CXCursor parent,
                                   CXClientData client_data);
-CXChildVisitResult parse_function_template(CXCursor c, CXCursor parent,
-                                           CXClientData client_data);
+template <typename Base>
+CXChildVisitResult parse_template(CXCursor c, CXCursor parent, CXClientData client_data);
 CXChildVisitResult parse_class(CXCursor c, CXCursor parent,
                                CXClientData client_data);
 CXChildVisitResult parse_namespace(CXCursor c, CXCursor parent,
@@ -88,6 +88,56 @@ std::string to_string(storage_class_t sc) {
 std::string get_name(CXCursor c) {
     CXString s = clang_getCursorSpelling(c);
     return to_string(s);
+}
+
+/** Replace template names.
+ *
+ * Replaces template variable in a type name.
+ *
+ * @param tname The type name containing template variables.
+ * @param template_names The names of the template variables.
+ * @param template_arguments The replacements for each variable.
+ * @return The given typename with all template variables replaced
+ *   with the corresponding types or variables.
+ */
+std::string replace_template_variables(
+    std::string tname,
+    const std::vector<std::string> &template_names,
+    const std::vector<std::string> &template_arguments) {
+  std::regex re("[a-zA-Z_][a-zA-Z0-9_]*");
+
+  // Search for valid C++ identifiers in name and replace.
+  std::string input = tname;
+  std::smatch match;
+  std::regex_search(tname, match, re);
+  std::stringstream output{};
+
+  while (!match.empty()) {
+    std::string ms = match.str();
+
+    // Copy what didn't match.
+    output << match.prefix();
+
+    bool matched = false;
+    for (int i = 0; i < static_cast<int>(template_names.size()); ++i) {
+      const std::string &n = template_names[i];
+      if (n == ms) {
+        // Replace match.
+        output << template_arguments[i];
+        matched = true;
+        break;
+      }
+    }
+    // If didn't match, keep string.
+    if (!matched) {
+        output << ms;
+    }
+    input = match.suffix();
+    std::regex_search(input, match, re);
+  }
+  output << input;
+  return output.str();
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -132,46 +182,74 @@ protected:
   bool valid_ = true;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+// CxxType
+////////////////////////////////////////////////////////////////////////////////
+
+/** A C++ type.
+ * Represents types associated with C++ language constructs.
+ */
 class CxxType {
-public:
-  CxxType(CXCursor c)
-      : cursor_(c), type_(clang_getCursorType(c)),
-        canonical_type_(clang_getCanonicalType(clang_getCursorType(c)))
+ public:
 
-  {
-    is_pointer_ = (type_.kind == CXType_Pointer);
-    is_lvalue_reference_ = (type_.kind == CXType_LValueReference);
-    is_rvalue_reference_ = (type_.kind == CXType_RValueReference);
-    is_const_ = clang_isConstQualifiedType(type_);
+
+    /** Create CxxType.
+     * @param t CXType to represent.
+     */
+    CxxType(CXType t) : type_(t), canonical_type_(clang_getCanonicalType(t)) {
+        name_ = to_string(clang_getTypeSpelling(type_));
+        canonical_name_ = to_string(clang_getTypeSpelling(canonical_type_));
+        is_pointer_ = (type_.kind == CXType_Pointer);
+        is_lvalue_reference_ = (type_.kind == CXType_LValueReference);
+        is_rvalue_reference_ = (type_.kind == CXType_RValueReference);
+        is_const_ = clang_isConstQualifiedType(type_);
+    }
+
+  /** Infer type from cursor.
+   * @param Clang AST cursor pointing to a typed C++ construct.
+   */
+    CxxType(CXCursor c) : CxxType(clang_getCursorType(c)) {}
+
+  /// The type's name.
+  std::string get_name() const { return name_; }
+
+  /// The canonical name.
+  std::string get_canonical_name() const { return canonical_name_; }
+
+  /** Replace template variables in type names.
+   *
+   * Replace template variables in the types name and canonical name.
+   *
+   * @param template_names Vector containing the names of the template variables to replace.
+   * @param template_arguments Vector containing the types and variables with which to
+   *    replace the template variables.
+   */
+  void replace_template_variables(const std::vector<std::string> &template_names,
+                                  const std::vector<std::string> &template_arguments) {
+    name_ = pxx::ast::replace_template_variables(name_, template_names, template_arguments);
+    canonical_name_ =
+        pxx::ast::replace_template_variables(name_, template_names, template_arguments);
   }
 
-  CxxType(CXType t) : type_(t), canonical_type_(clang_getCanonicalType(t)) {}
-
-  std::string get_type_spelling() const {
-    return to_string(clang_getTypeSpelling(type_));
-  }
-
-  std::string get_name() const {
-      return get_type_spelling();
-  }
-
-  std::string get_canonical_type_spelling() const {
-    return to_string(clang_getTypeSpelling(type_));
-  }
-
+  /// Is the type const qualified?
   bool is_const() const { return is_const_; }
+  /// Is the type a pointer?
   bool is_pointer() const { return is_pointer_; }
+  /// Is the type a l-value reference?
   bool is_lvalue_reference() const { return is_lvalue_reference_; }
+  /// Is the type a r-value reference?
   bool is_rvalue_reference() const { return is_rvalue_reference_; }
-
+  /// Is the type an Eigen type?
   bool is_eigen_type() const {
-    std::string s = get_canonical_type_spelling();
+    const std::string &s = canonical_name_;
     return (s.find("Eigen::") != s.npos);
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const CxxType &t);
 
-protected:
+ protected:
+  std::string name_;
+  std::string canonical_name_;
   CXCursor cursor_;
   CXType type_;
   CXType canonical_type_;
@@ -182,14 +260,135 @@ protected:
 };
 
 void to_json(json &j, const CxxType &t) {
-    j["name"] = t.get_type_spelling();
+    j["name"] = t.get_name();
 }
 
 std::ostream &operator<<(std::ostream &stream, const CxxType &t) {
-  stream << t.get_type_spelling() << " (" << t.get_canonical_type_spelling()
+  stream << t.get_name() << " (" << t.get_canonical_name()
          << ") ";
   return stream;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Cxx Templates
+////////////////////////////////////////////////////////////////////////////////
+
+template<typename Base>
+class CxxTemplateInstance : public Base
+{
+    using Base::replace_template_variables;
+public:
+    CxxTemplateInstance(std::string name_,
+                        std::vector<std::string> template_arguments_,
+                        std::vector<std::string> template_values_,
+                        const Base &base)
+        : Base(base), name(name_), template_values(template_values_) {
+        replace_template_variables(template_arguments_, template_values_);
+    }
+
+    std::string get_name() const {
+        std::stringstream name;
+        name << Base::get_name();
+        name << "<";
+        for (size_t i = 0; i < template_values.size(); ++i) {
+            name << template_values[i];
+            if (i < template_values.size() - 1) {
+                name << ", ";
+            }
+        }
+        name << ">";
+        return name.str();
+    }
+
+    std::string get_qualified_name() const {
+        std::stringstream name;
+        name << Base::get_qualified_name();
+        name << "<";
+        for (size_t i = 0; i < template_values.size(); ++i) {
+            name << template_values[i];
+            if (i < template_values.size() - 1) {
+                name << ", ";
+            }
+        }
+        name << ">";
+        return name.str();
+    }
+    std::string name;
+    std::vector<std::string> template_values;
+
+};
+
+
+template <typename Base>
+    void to_json(json &j, const CxxTemplateInstance<Base> &t) {
+    to_json(j, static_cast<Base>(t));
+    j["name"] = t.get_name();
+    j["qualified_name"] = t.get_qualified_name();
+    j["export_name"] = t.name;
+    j["template_values"] = t.template_values;
+
+}
+
+template <typename Base>
+class CxxTemplate : public Base {
+
+    using Base::cursor_;
+    using Base::settings_;
+    using Base::get_name;
+    using Base::replace_template_variables;
+
+public:
+
+    ///template<typename... Ts>
+    ///    CxxTemplate(Ts&&... args) : Base(std::forward<Ts>(args)...) {
+    ///}
+    CxxTemplate() = delete;
+
+    CxxTemplate(CXCursor c, const CxxConstruct &p) : Base(c, p) {
+        clang_visitChildren(cursor_, &parse_template<Base>, reinterpret_cast<CXClientData>(this));
+    }
+
+    void add_template_argument(CXCursor c) {
+        template_arguments_.emplace_back(c, *this);
+    }
+
+    std::vector<CxxTemplateInstance<Base>> get_instances() const {
+
+        std::vector<std::string> template_argument_names;
+        for (auto &ta : template_arguments_) {
+            template_argument_names.push_back(ta.get_name());
+        }
+        std::vector<CxxTemplateInstance<Base>> instances{};
+        for (auto &is : settings_.instance_strings) {
+            std::string export_name = std::get<0>(is);
+            if (export_name == "") {
+                export_name = get_name();
+            }
+            instances.emplace_back(export_name, template_argument_names, std::get<1>(is), *this);
+        }
+        return instances;
+    }
+
+    friend std::ostream &operator<<(std::ostream &stream, const CxxTemplate &f) {
+        stream << "template<";
+        for (size_t i = 0; i < f.template_arguments_.size(); ++i) {
+            auto &p = f.template_arguments_[i];
+            stream << p.get_name();
+            if (i < f.template_arguments_.size() - 1) {
+                stream << ", ";
+            }
+        }
+        stream << "> " << static_cast<Base>(f);
+        return stream;
+    }
+
+
+protected:
+
+  std::vector<CxxConstruct> template_arguments_ = {};
+
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Variables
@@ -199,26 +398,31 @@ class Variable : public CxxConstruct {
 public:
   Variable(CXCursor c, const CxxConstruct &p) : CxxConstruct(c, p), type_(c) {}
 
-  std::string get_type_spelling() const { return type_.get_type_spelling(); }
+  std::string get_typename() const { return type_.get_canonical_name(); }
 
   bool is_const() const { return type_.is_const(); }
   bool is_eigen_type() const { return type_.is_eigen_type(); }
   friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
   friend void to_json(json &j, const Variable &v);
 
+  void replace_template_variables(const std::vector<std::string> &template_names,
+                                  const std::vector<std::string> &template_arguments) {
+        type_.replace_template_variables(template_names, template_arguments);
+    }
+
 protected:
-  std::string type_name_;
+  std::string typename_;
   CxxType type_;
 };
 
 void to_json(json &j, const Variable &v) {
   j["name"] = v.name_;
-  j["type_name"] = v.type_.get_type_spelling();
+  j["typename"] = v.get_typename();
   j["const"] = v.type_.is_const();
 }
 
 std::ostream &operator<<(std::ostream &stream, const Variable &v) {
-  stream << v.type_name_ << " " << v.name_ << std::endl;
+  stream << v.typename_ << " " << v.name_ << std::endl;
   return stream;
 }
 
@@ -251,7 +455,7 @@ public:
     }
   }
 
-  std::string get_type_spelling() const { return type_name_; }
+  std::string get_type_spelling() const { return typename_; }
 
   friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
   friend void to_json(json &j, const MemberVariable &v);
@@ -264,7 +468,7 @@ private:
 void to_json(json &j, const MemberVariable &v) {
   j["name"] = v.name_;
   j["qualified_name"] = v.get_qualified_name();
-  j["type_name"] = v.type_name_;
+  j["typename"] = v.typename_;
   j["access"] = to_string(v.access_specifier_);
   j["storage"] = to_string(v.storage_class_);
   j["const"] = v.is_const();
@@ -281,17 +485,16 @@ class Function : public CxxConstruct {
 public:
   Function(CXCursor c, const CxxConstruct &p)
       : CxxConstruct(c, p),
-        result_type_(clang_getResultType(clang_getCursorType(c)))
+        result_type_{clang_getResultType(clang_getCursorType(c))}
   {
-    // Parse parameters.
-    size_t n = clang_Cursor_getNumArguments(c);
-    for (size_t i = 0; i < n; ++i) {
-      add_parameter(clang_Cursor_getArgument(c, i));
-    }
+      clang_visitChildren(cursor_, &parse_function,
+                          reinterpret_cast<CXClientData>(this));
   }
+
   void add_parameter(CXCursor c) {
     parameters_.emplace_back(c, *this);
   }
+
 
   bool uses_eigen() const {
       bool eigen_found = result_type_.is_eigen_type();
@@ -299,6 +502,14 @@ public:
                                  parameters_.end(),
                                  [](const Variable &p){ return p.is_eigen_type(); });
       return eigen_found;
+  }
+
+  void replace_template_variables(const std::vector<std::string> &template_names,
+                                  const std::vector<std::string> &template_arguments) {
+      for (auto &p : parameters_) {
+          p.replace_template_variables(template_names, template_arguments);
+      }
+      result_type_.replace_template_variables(template_names, template_arguments);
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const Function &cl);
@@ -309,18 +520,22 @@ protected:
   CxxType result_type_;
 };
 
+using FunctionTemplate = CxxTemplate<Function>;
+using FunctionTemplateInstance = CxxTemplateInstance<Function>;
+
 void to_json(json &j, const Function &f) {
   j["name"] = f.get_name();
   j["qualified_name"] = f.get_qualified_name();
   j["parameters"] = f.parameters_;
   j["result_type"] = f.result_type_;
+
 }
 
 std::ostream &operator<<(std::ostream &stream, const Function &f) {
   stream << f.name_ << "(";
   for (size_t i = 0; i < f.parameters_.size(); ++i) {
     auto &p = f.parameters_[i];
-    stream << p.get_type_spelling();
+    stream << p.get_typename();
     if (i < f.parameters_.size() - 1) {
       stream << ", ";
     }
@@ -332,163 +547,6 @@ std::ostream &operator<<(std::ostream &stream, const Function &f) {
 ////////////////////////////////////////////////////////////////////////////////
 // Function Template
 ////////////////////////////////////////////////////////////////////////////////
-
-std::string replace_template_names(
-    CxxType type,
-    const std::vector<std::string> &template_names,
-    const std::vector<std::string> &types) {
-    std::regex re("[a-zA-Z_][a-zA-Z0-9_]*");
-  std::string name = type.get_type_spelling();
-
-  // Search for valid C++ identifiers in name and replace.
-  std::smatch match;
-  std::regex_search(name, match, re);
-  while (!match.empty()) {
-    auto match_first = match[0].first;
-    auto match_second = match[0].second;
-    int match_len = match_second - match_first;
-    std::string ms(match_first, match_second);
-    for (int i = 0; i < static_cast<int>(template_names.size()); ++i) {
-      const std::string &n = template_names[i];
-      if (n == ms) {
-        int replacement_len = types[i].size();
-        name.erase(match_first, match_second);
-        match_second -= match_len;
-        name.insert(match_first, types[i].begin(), types[i].end());
-        match_second += replacement_len;
-        break;
-      }
-    }
-    decltype(match_second) end = name.end();
-    std::regex_search(match_second, end, match, re);
-  }
-  return name;
-}
-
-class FunctionTemplate;
-
-struct FunctionTemplateInstance {
-    FunctionTemplateInstance(std::string function_name_,
-                             std::string export_name_,
-                             const FunctionTemplate &ft,
-                             std::vector<std::string> types_);
-
-    std::string qualified_name;
-    std::string export_name;
-    std::vector<std::string> types;
-    std::string result_type;
-    std::vector<std::string> argument_types;
-};
-
-class FunctionTemplate : public CxxConstruct {
-
-public:
-  FunctionTemplate(CXCursor c, const CxxConstruct &p)
-      : CxxConstruct(c, p), result_type_(clang_getResultType(clang_getCursorType(c)))
-    {
-        CXType t = clang_getCursorType(c);
-        int n = clang_getNumArgTypes(t);
-        for (int i = 0; i < n; ++i) {
-            argument_types_.emplace_back(clang_getArgType(t, i));
-        }
-
-        clang_visitChildren(cursor_, &parse_function_template, reinterpret_cast<CXClientData>(this));
-
-    }
-
-    void add_template_argument(CXCursor c) {
-        template_arguments_.emplace_back(c, *this);
-    }
-
-    const std::vector<CxxType> get_argument_types() const {return argument_types_;}
-    const std::vector<CxxConstruct> get_template_arguments() const {return template_arguments_;}
-    CxxType get_result_type() const {return result_type_;}
-
-    std::vector<FunctionTemplateInstance> get_instances() const {
-        std::vector<FunctionTemplateInstance> instances{};
-        for (auto &is : settings_.instance_strings) {
-            std::string export_name = std::get<0>(is);
-            if (export_name == "") {
-                export_name = get_name();
-            }
-            std::vector<std::string> types = std::get<1>(is);
-            instances.emplace_back(get_qualified_name(), export_name, *this, types);
-        }
-        return instances;
-    }
-
-  friend std::ostream &operator<<(std::ostream &stream, const FunctionTemplate &cl);
-  friend void to_json(json &j, const FunctionTemplate &f);
-
-protected:
-  std::vector<CxxType> argument_types_ = {};
-  std::vector<CxxConstruct> template_arguments_ = {};
-
-  CxxType result_type_;
-};
-
-FunctionTemplateInstance::FunctionTemplateInstance(std::string qualified_name_,
-                                                   std::string export_name_,
-                                                   const FunctionTemplate &ft,
-                                                   std::vector<std::string> types_)
-    : qualified_name(qualified_name_), export_name(export_name_), types(types_) {
-    // Get names of template arguments to replace.
-    std::vector<std::string> template_argument_names{};
-    for (auto &ta : ft.get_template_arguments()) {
-        template_argument_names.push_back(ta.get_name());
-    }
-
-    auto &arguments = ft.get_argument_types();
-    for (auto &a : arguments) {
-        argument_types.push_back(replace_template_names(a, template_argument_names, types));
-    }
-
-    result_type = replace_template_names(ft.get_result_type(), template_argument_names, types);
-}
-
-
-void to_json(json &j, const FunctionTemplate &f) {
-  j["name"] = f.get_name();
-  j["qualified_name"] = f.get_qualified_name();
-  j["result_type"] = f.result_type_;
-}
-
-void to_json(json &j, const FunctionTemplateInstance &f) {
-    j["qualified_name"] = f.qualified_name;
-    j["export_name"] = f.export_name;
-    j["result_type"] = f.result_type;
-    j["argument_types"] = f.argument_types;
-    j["template_arguments"] = f.types;
-}
-
-std::ostream &operator<<(std::ostream &stream, const FunctionTemplate &f) {
-  stream << "template<";
-  for (size_t i = 0; i < f.template_arguments_.size(); ++i) {
-    auto &p = f.template_arguments_[i];
-    stream << p.get_name();
-    if (i < f.template_arguments_.size() - 1) {
-      stream << ", ";
-    }
-  }
-  stream << "> " << f.name_ << "(";
-  for (size_t i = 0; i < f.argument_types_.size(); ++i) {
-    auto &p = f.argument_types_[i];
-    stream << p.get_type_spelling();
-    if (i < f.argument_types_.size() - 1) {
-      stream << ", ";
-    }
-  }
-  stream << "), exported = " << f.get_export_settings().exp;
-  std::cout << ", instances = [";
-  for (auto &is : f.get_export_settings().instance_strings) {
-      std::cout << "(" << std::get<0>(is) << "," << std::get<1>(is)[0] << ")";
-  }
-  std::cout << "]" << std::endl;
-  
-
-  return stream;
-
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Classes
@@ -523,6 +581,20 @@ public:
       return eigen_found;
   }
 
+  void replace_template_variables(
+      const std::vector<std::string> &template_names,
+      const std::vector<std::string> &template_arguments) {
+    for (auto &c : constructors_) {
+      c.replace_template_variables(template_names, template_arguments);
+    }
+    for (auto &m : methods_) {
+      m.replace_template_variables(template_names, template_arguments);
+    }
+    for (auto &d : data_members_) {
+      d.replace_template_variables(template_names, template_arguments);
+    }
+  }
+
   std::vector<Function> get_exported_methods() const {
       std::vector<Function> exports;
       std::copy_if (methods_.begin(),
@@ -555,6 +627,9 @@ private:
   std::vector<Function> methods_;
   std::vector<MemberVariable> data_members_;
 };
+
+using ClassTemplate = CxxTemplate<Class>;
+using ClassTemplateInstance = CxxTemplateInstance<Class>;
 
 void to_json(json &j, const Class &c) {
   j["name"] = c.get_name();
@@ -600,6 +675,7 @@ Namespace(CXCursor c, ExportSettings s = ExportSettings()) : CxxConstruct(c, s) 
   }
 
   void add_class(CXCursor c) { classes_.emplace_back(c, *this); }
+  void add_class_template(CXCursor c) { class_templates_.emplace_back(c, *this); }
   void add_function(CXCursor c) { functions_.emplace_back(c, *this); }
   void add_function_template(CXCursor c) { function_templates_.emplace_back(c, *this); }
   void add_namespace(CXCursor c) {
@@ -671,9 +747,22 @@ Namespace(CXCursor c, ExportSettings s = ExportSettings()) : CxxConstruct(c, s) 
       return exports;
   }
 
+  std::vector<ClassTemplateInstance> get_class_template_instances() const {
+      std::vector<ClassTemplateInstance> exports;
+      for(auto &&ft : class_templates_) {
+          auto instances = ft.get_instances();
+          exports.insert(exports.end(), instances.begin(), instances.end());
+      }
+      for(auto &&n : namespaces_) {
+          auto nested_instances = n.second.get_class_template_instances();
+          exports.insert(exports.end(), nested_instances.begin(), nested_instances.end());
+      }
+      return exports;
+  }
 
 protected:
   std::vector<Class> classes_;
+  std::vector<ClassTemplate> class_templates_;
   std::vector<Function> functions_;
   std::vector<FunctionTemplate> function_templates_;
   std::map<std::string, Namespace> namespaces_;
@@ -683,10 +772,12 @@ void to_json(json &j, const Namespace &ns) {
   auto classes = ns.get_exported_classes();
   auto functions = ns.get_exported_functions();
   auto function_template_instances = ns.get_function_template_instances();
+  auto class_template_instances = ns.get_class_template_instances();
 
   j["classes"] = classes;
   j["functions"] = functions;
   j["function_template_instances"] = function_template_instances;
+  j["class_template_instances"] = class_template_instances;
 }
 
 std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {
@@ -701,6 +792,12 @@ std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {
       std::cout << std::endl;
       std::cout << f;
   }
+  stream << "Class templates" << std::endl;
+  for (auto &&c : ns.class_templates_) {
+      std::cout << std::endl;
+      std::cout << c;
+  }
+
   stream << "Function templates" << std::endl;
   for (auto &&f : ns.function_templates_) {
       std::cout << std::endl;
@@ -769,6 +866,9 @@ CXChildVisitResult parse_namespace(CXCursor c,
   case CXCursor_FunctionTemplate: {
       ns->add_function_template(c);
   } break;
+  case CXCursor_ClassTemplate: {
+      ns->add_class_template(c);
+  } break;
   case CXCursor_Namespace: {
     ns->add_namespace(c);
   } break;
@@ -812,9 +912,11 @@ CXChildVisitResult parse_function(CXCursor c, CXCursor /*parent*/,
   return CXChildVisit_Continue;
 }
 
-CXChildVisitResult parse_function_template(CXCursor c, CXCursor /*parent*/,
-                                           CXClientData client_data) {
-    FunctionTemplate *ft = reinterpret_cast<FunctionTemplate *>(client_data);
+template<typename Base>
+CXChildVisitResult parse_template(CXCursor c,
+                                  CXCursor /*parent*/,
+                                  CXClientData client_data) {
+    CxxTemplate<Base> *ft = reinterpret_cast<CxxTemplate<Base> *>(client_data);
     CXCursorKind k = clang_getCursorKind(c);
     switch (k) {
     case CXCursor_TemplateTypeParameter: {
