@@ -78,6 +78,7 @@ def main():
 
     include_path = os.path.join(os.path.dirname(__file__), "include", "clang")
 
+    print("other args: ", other_args)
     parser = Parser(input_file, [f"-I{include_path}"] + other_args)
     tu = parser.parse()
 

@@ -35,8 +35,7 @@ namespace detail {
         }
 
         static CXChildVisitResult traverse(CXCursor c, CXCursor /*p*/, CXClientData d) {
-            AstFormatter *formatter = reinterpret_cast<AstFormatter *>(d);
-            formatter->print(c);
+            AstFormatter *formatter = reinterpret_cast<AstFormatter *>(d); formatter->print(c);
             formatter->level_++;
             clang_visitChildren(c, traverse, d);
             formatter->level_--;
@@ -228,7 +227,7 @@ class CxxType {
                                   const std::vector<std::string> &template_arguments) {
     name_ = pxx::ast::replace_template_variables(name_, template_names, template_arguments);
     canonical_name_ =
-        pxx::ast::replace_template_variables(name_, template_names, template_arguments);
+        pxx::ast::replace_template_variables(canonical_name_, template_names, template_arguments);
   }
 
   /// Is the type const qualified?
@@ -261,6 +260,7 @@ class CxxType {
 
 void to_json(json &j, const CxxType &t) {
     j["name"] = t.get_name();
+    j["canonical_name"] = t.get_canonical_name();
 }
 
 std::ostream &operator<<(std::ostream &stream, const CxxType &t) {
@@ -690,16 +690,20 @@ Namespace(CXCursor c, ExportSettings s = ExportSettings()) : CxxConstruct(c, s) 
   }
 
   bool uses_eigen() const {
+      std::cout << "ns name: " << name_ << std::endl;
+      if (name_.find("Eigen") != std::string::npos) {
+          return true;
+      }
       bool eigen_found = false;
+      eigen_found |= std::any_of(namespaces_.begin(),
+                                 namespaces_.end(),
+                                 [](const auto &n){ return n.second.uses_eigen(); });
       eigen_found |= std::any_of(classes_.begin(),
                                  classes_.end(),
                                  [](const Class &c){ return c.uses_eigen(); });
       eigen_found |= std::any_of(functions_.begin(),
                                  functions_.end(),
                                  [](const Function &f){ return f.uses_eigen(); });
-      eigen_found |= std::any_of(namespaces_.begin(),
-                                 namespaces_.end(),
-                                 [](const auto &n){ return n.second.uses_eigen(); });
       return eigen_found;
   }
 

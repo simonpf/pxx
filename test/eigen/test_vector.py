@@ -1,4 +1,5 @@
-import vector
+import numpy as np
+import eigen_vector
 
 def test_add():
     m = np.random.randint(5, 20)
@@ -7,6 +8,6 @@ def test_add():
     a = np.random.rand(m, n)
     b = np.random.rand(m, n)
 
-    c1 = vector.add(a, b)
+    c1 = eigen_vector.add(a, b)
     c2 = a + b
     assert(all(np.isclose(c1, c2)))

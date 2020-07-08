@@ -5,6 +5,7 @@
 ## endif
 ## if eigen_headers
 #include <pybind11/eigen.h>
+#include <pybind11/eigen_tensor.h>
 ## endif 
 ## for include in includes
 #include <{{ include }}>
