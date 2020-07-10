@@ -40,9 +40,11 @@
 # You should have received a copy of the GNU General Public License
 # along with RTags.  If not, see <https://www.gnu.org/licenses/>.
 #=============================================================================
-# Copyright (C) 2020 Simon Pfreundschuh
 #
-# Added
+# This file was copied from RTags and LIBCLANG_BUILTIN_DIR was added to
+# outputs.
+#
+# Copyright (C) 2020 Simon Pfreundschuh
 
 
 if (NOT LIBCLANG_ROOT_DIR)
@@ -140,9 +142,12 @@ else ()
 endif ()
 message("-- Using Clang version ${LIBCLANG_VERSION_STRING} from ${LIBCLANG_LIBDIR} with CXXFLAGS ${LIBCLANG_CXXFLAGS}")
 
+string(REGEX MATCH "[0-9\.]*" LIBCLANG_VERSION_NUMBER ${LIBCLANG_VERSION_STRING})
+
+
 
 execute_process(COMMAND ${LIBCLANG_LLVM_CONFIG_EXECUTABLE} --bindir OUTPUT_VARIABLE LIBCLANG_BIN_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(LIBCLANG_BUILTIN_DIR "${LIBCLANG_BIN_DIR}/../lib/clang/${LIBCLANG_VERSION_STRING}/include")
+set(LIBCLANG_BUILTIN_DIR "${LIBCLANG_BIN_DIR}/../lib/clang/${LIBCLANG_VERSION_NUMBER}/include")
 
 # Handly the QUIETLY and REQUIRED arguments and set LIBCLANG_FOUND to TRUE if all listed variables are TRUE
 include(FindPackageHandleStandardArgs)

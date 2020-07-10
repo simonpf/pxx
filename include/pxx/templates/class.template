@@ -2,14 +2,18 @@
 {#--------------------------------------------------------------------------#}
   // Constructors
   {% for c in class.constructors %}
-  .def(py::init<{% for t in c.parameters %}{{ t.typename }} {% if loop.index1 < length(c.parameters) %},{% endif %} {% endfor %}>())
+  .def(py::init<{% for t in c.arguments %}{{ t.type.name }} {% if loop.index1 < length(c.arguments) %},{% endif %} {% endfor %}>())
   {% endfor %}
 {#--------------------------------------------------------------------------#}
 {% if length(class.methods) > 0 %}
   // Class methods
 {% endif %}
 {% for m in class.methods %}
-  .def("{{ m.name }}", ({{ m.result_type.name }}({{ class.qualified_name }}::*)({% for p in m.parameters %} {{ p.typename }} {% if loop.index1 < length(m.parameters) %} , {% endif %} {% endfor %})) &{{ m.qualified_name }})
+{% if m.has_overload %}
+  .def("{{ m.name }}", ({{ m.pointer_type }}) &{{ m.qualified_name }})
+{% else %}
+  .def("{{ m.name }}", &{{ m.qualified_name }})
+{% endif %}
 {% endfor %}
 {#--------------------------------------------------------------------------#}
 {% if length(class.data_members) > 0 %}

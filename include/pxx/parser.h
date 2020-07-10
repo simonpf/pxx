@@ -33,9 +33,9 @@ public:
     }
   }
 
-  ast::TranslationUnit parse() {
+  ast::AST parse() {
     CXCursor cursor = clang_getTranslationUnitCursor(unit_);
-    ast::TranslationUnit tu{cursor, settings_};
+    ast::AST tu{cursor, settings_};
     return tu;
   }
 

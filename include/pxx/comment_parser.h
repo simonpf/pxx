@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace pxx::ast {
+namespace pxx::comment_parser {
 
 void initialize_parser();
 
@@ -67,30 +67,29 @@ struct CommentParser {
     std::string l;
     // Read lines in comment.
     while (std::getline(s, l)) {
+      std::istringstream ls(l);
 
-        std::istringstream ls(l);
+      std::string item;
 
-        std::string item;
-
-        if ((ls >> item) && (item != "//")) {
-            continue;
-        }
-
-        // Check is this is a pxx comment.
-        if ((ls >> item) && (item != "pxx")) {
-          continue;
-        }
-        if ((ls >> item) && (item != "::")) {
-          continue;
-        }
-
-        parser.enable_packrat_parsing();
-        std::vector<ExportSettings> ret;
-        parser.parse(l.c_str(), ret);
-        for (auto& s : ret) {
-          settings += s;
-        }
+      if ((ls >> item) && (item != "//")) {
+        continue;
       }
+
+      // Check is this is a pxx comment.
+      if ((ls >> item) && (item != "pxx")) {
+        continue;
+      }
+      if ((ls >> item) && (item != "::")) {
+        continue;
+      }
+
+      parser.enable_packrat_parsing();
+      std::vector<ExportSettings> ret;
+      parser.parse(l.c_str(), ret);
+      for (auto& s : ret) {
+        settings += s;
+      }
+    }
   }
 
   ExportSettings settings;
@@ -113,7 +112,6 @@ peg::parser CommentParser::parser = peg::parser(R"(
     instance <- 'instance('(string ',')? string_list ')'
     %whitespace <- [ \t]*
     )");
-
 
 void initialize_parser() {
   CommentParser::parser["pxx"] = [](const peg::SemanticValues& sv) {
@@ -153,6 +151,6 @@ void initialize_parser() {
     return s;
   };
 }
-}  // namespace pxx::ast
+}  // namespace pxx::comment_parser
 
 #endif

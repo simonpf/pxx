@@ -11,6 +11,7 @@
 namespace pxx::python {
 
 using std::filesystem::path;
+using pxx::ast::to_json;
 
 path template_directory = path(__FILE__).parent_path().append("templates/");
 
@@ -22,19 +23,19 @@ public:
     environment_.set_lstrip_blocks(true);
   }
 
-  std::string render(ast::TranslationUnit tu) {
+  std::string render(ast::AST tu) {
     json data{};
     to_json(data, tu);
     data["module_name"] = name_;
     data["includes"] = includes_;
 
     // Required headers.
-    if (tu.has_standard_headers()) {
+    if (tu.uses_standard_headers()) {
       data["standard_headers"] = true;
     } else {
       data["standard_headers"] = false;
     }
-    if (tu.uses_eigen()) {
+    if (tu.uses_eigen_headers()) {
       data["eigen_headers"] = true;
     } else {
       data["eigen_headers"] = false;

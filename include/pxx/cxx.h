@@ -136,12 +136,16 @@ class Scope {
     size_t count = 0;
     auto end = names_.end();
     auto it = std::find(names_.begin(), end, name);
-    while (it != end) {
+    while (it < end) {
       ++count;
       ++it;
       it = std::find(it, end, name);
     }
     return count;
+  }
+
+  void set_parent(Scope *p) {
+      parent_scope_ = p;
   }
 
   void add_type_name(std::string name, std::string value) {
@@ -194,35 +198,53 @@ class LanguageObject {
       : name_(to_string(clang_getCursorSpelling(cursor))),
         parent_(parent),
         scope_(parent ? name_ : "", parent ? parent->get_scope() : nullptr) {
-
-        if (parent) {
-          settings_ = parent->get_export_settings();
-        }
-
-        export_name_ = name_;
-
-        if (clang_isDeclaration(clang_getCursorKind(cursor))) {
-          auto s = to_string(clang_Cursor_getRawCommentText(cursor));
-          CommentParser cp(s, settings_);
-          settings_ = cp.settings;
+    if (parent) {
+      settings_ = parent->get_export_settings();
     }
 
-  }
+    export_name_ = name_;
 
+    if (clang_isDeclaration(clang_getCursorKind(cursor))) {
+      auto s = to_string(clang_Cursor_getRawCommentText(cursor));
+      CommentParser cp(s, settings_);
+      settings_ = cp.settings;
+    }
+  }
+  /** Clone language object
+   *
+   * Creates new LanguageObject object on the heap and returns it
+   * as smart pointer.
+   *
+   * @param The new parent of the language object or nullptr for AST root.
+   * @return std::shared_ptr pointing to clone.
+   */
+  std::shared_ptr<LanguageObject> clone(LanguageObject *p) {
+    auto lo_new = std::make_shared<LanguageObject>(*this);
+    lo_new->set_parent(p);
+    return lo_new;
+  }
   /** Spelling of language object.
      * @return The name of the object as it appears in the code.
      */
   std::string get_name() const { return name_; }
-
+  /** Set spelling of language object.
+   * @param The new name of the object.
+   */
   void set_name(std::string name) {
-      scope_.set_name(name);
-      name_ = name;
+    scope_.set_name(name);
+    name_ = name;
   }
 
+  /// Get parent pointer.
+  LanguageObject * get_parent() {return parent_;}
+  const LanguageObject * get_parent() const {return parent_;}
+  /** Set parent pointer of object.
+   * @param lo Pointer to new parent.
+   */
   void set_parent(LanguageObject *lo) {
       parent_ = lo;
+      scope_.set_parent(lo->get_scope());
   }
-
   /** Qualified name of language object.
      *
      * The qualified name is the name of the object that identifies it at root scope.
@@ -230,26 +252,46 @@ class LanguageObject {
      * @return The qualified name with all dependent parts are resolved.
      */
   std::string get_qualified_name() const {
-      std::string prefix = "";
-      if (parent_) {
-          Scope *ps = parent_->get_scope();
-          if (ps) {
-              prefix = ps->get_prefix();
-          }
+    std::string prefix = "";
+    if (parent_) {
+      Scope *ps = parent_->get_scope();
+      if (ps) {
+        prefix = ps->get_prefix();
       }
-      return prefix + name_;
+    }
+    return prefix + name_;
   }
+  /** Get export name.
+   * The export name is the name that the object will have on the Python side.
+   * It can modified set using a pxx comment.
+   * @return The export name
+   */
+  std::string get_export_name() const { return export_name_; }
+  /** Set the export name of the object.
+   * @param The new export name.
+   */
+  void set_export_name(std::string name) { export_name_ = name; }
 
-  std::string get_export_name() const {return export_name_;}
-  void set_export_name(std::string name) {export_name_ = name;}
-
-  /// Get the object's parent scope.
+  /** Get the object's scope.
+   *
+   * Note that this is the object's scope and not the scope at which the object
+   * is defined, which is the parent's scope.
+   *
+   * @return The object's scope.
+   */
   Scope *get_scope() { return &scope_; }
   const Scope *get_scope() const { return &scope_; }
 
   /// Get the object's export settings.
+  /** Get the object's export settings.
+   *
+   * The export setting define how the object is exposed through
+   * the Python interface.
+   *
+   * @return The object's scope.
+   */
   ExportSettings get_export_settings() const { return settings_; }
-  void set_export_settings(ExportSettings settings) {settings_ = settings;}
+  void set_export_settings(ExportSettings settings) { settings_ = settings; }
 
  protected:
   std::string name_;
@@ -259,15 +301,35 @@ class LanguageObject {
   ExportSettings settings_;
 };
 
+/** Generic clone method.
+ *
+ * Generic method to clone AST nodes. Cloning AST nodes is required to
+ * create an independent cope of parts of the AST, which is required
+ * for example for template instances. Note that cloning the AST also
+ * requires updating the node parent pointer, which this method
+ * takes care of.
+ *
+ * @param lo The LanguageObject instance to clone.
+ * @param Pointer to cloned parent node
+ * @return Smart pointer to the cloned object.
+ */
 template <typename T>
-std::shared_ptr<T> clone(const T &t, LanguageObject *p) {
-    std::shared_ptr<T> a = std::make_shared<T>(t);
-    if (!p) {
-        a->set_parent(p);
-    }
-    return a;
+std::shared_ptr<T> clone(const T &lo, LanguageObject *p) {
+  std::shared_ptr<T> a = std::make_shared<T>(lo);
+  if (p) {
+    a->set_parent(p);
+  }
+  return a;
 }
 
+/** JSON serialization of LanguageObject
+ *
+ * Interface function defining the interface for the json library.
+ * Stores name, qualified and export name of the language object.
+ *
+ * @param j JSON handle serving as destination.
+ * @param lo The language object to serialize.
+ */
 void to_json(json &j, LanguageObject lo) {
   j["name"] = lo.get_name();
   j["qualified_name"] = lo.get_qualified_name();
@@ -283,8 +345,9 @@ void to_json(json &j, LanguageObject lo) {
  */
 class Type {
  public:
-  /** Create Type.
+  /** Create type object from libclang type.
      * @param t CXType to represent.
+     * @param p Scope  which the type should be interpreted.
      */
     Type(CXType t, Scope *p) : type_(t), scope_(p) {
     name_ = to_string(clang_getTypeSpelling(type_));
@@ -299,7 +362,26 @@ class Type {
     is_const_ = clang_isConstQualifiedType(type_);
   }
 
+ /** Create type object from libclang cursor.
+   * @param c Cursor pointing to typed object.
+   * @param p Scope  which the type should be interpreted.
+   */
   Type(CXCursor c, Scope *p) : Type(clang_getCursorType(c), p) {}
+
+  /** Clone type object.
+     *
+     * Creates an independent clone of the type object on the heap and
+     * updates the pointer to the parent scope according to the provided
+     * parent.
+     *
+     * @p Pointer to cloned parent.
+     * @return Smart pointer to clone object.
+     */
+  std::shared_ptr<Type> clone(LanguageObject *p) {
+    auto t_new = std::make_shared<Type>(*this);
+    t_new->set_scope(p->get_parent()->get_scope());
+    return t_new;
+  }
 
   /// The type's name.
   std::string get_name() const { return name_; }
@@ -329,8 +411,7 @@ class Type {
   bool is_lvalue_reference() const { return is_lvalue_reference_; }
   /// Is the type a r-value reference?
   bool is_rvalue_reference() const { return is_rvalue_reference_; }
-  /// Is the type an Eigen type?
-
+  /// Set scope in which the type is defined.
   void set_scope(Scope *s) {scope_ = s;}
 
   friend std::ostream &operator<<(std::ostream &stream, const Type &t);
@@ -346,6 +427,11 @@ class Type {
   Scope *scope_;
 };
 
+/** JSON serialization of Type
+ *
+ * @param j JSON handle serving as destination.
+ * @param lo The language object to serialize.
+ */
 void to_json(json &j, const Type &t) {
   j["name"] = t.get_name();
   j["qualified_name"] = t.get_qualified_name();
@@ -366,32 +452,63 @@ std::ostream &operator<<(std::ostream &stream, const Type &t) {
  */
 class Variable : public LanguageObject {
  public:
+  /** Create variable object from libclang cursor.
+   * @param c libclang cursor representing a CXX_ParmDecl or similar.
+   * @param p Pointer to parent object.
+   */
   Variable(CXCursor c, LanguageObject *p)
       : LanguageObject(c, p), type_(c, p->get_scope()) {}
 
+  Type get_type(){ return type_;}
+  /// Return name (spelling) of the variable's type.
   std::string get_typename() const { return type_.get_name(); }
 
+  /// Is the variable const qualified?
   bool is_const() const { return type_.is_const(); }
-  friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
-  friend void to_json(json &j, const Variable &v);
 
+  /** Clone variable.
+   *
+   * Creates clone of this variable object and it descendants on heap
+   * and updates its parent pointer.
+   *
+   * @param p The new parent.
+   * @return Smart pointer to newly created clone.
+   */
   std::shared_ptr<Variable> clone(LanguageObject *p) {
-      std::shared_ptr<Variable> v = std::make_shared<Variable>(*this);
-      set_parent(p);
-      type_.set_scope(p->get_scope());
+    std::shared_ptr<Variable> v = std::make_shared<Variable>(*this);
+    v->set_parent(p);
+    v->type_ = *v->type_.clone(v.get());
+    return v;
   }
 
+  /** Replace template variables with values.
+   *
+   * Recurrent replacement of template variable with specific types or values.
+   * Note that this changes the AST and should therefore be performed only
+   * on independent copies of the original AST.
+   *
+   * @param template_names Names of the template arguments to replace.
+   * @param template_values Values with which to replace the template arguments.
+   */
   void replace_template_variables(
       const std::vector<std::string> &template_names,
       const std::vector<std::string> &template_values) {
     type_.replace_template_variables(template_names, template_values);
   }
 
+  friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
+  friend void to_json(json &j, const Variable &v);
+
  protected:
   std::string typename_;
   Type type_;
 };
 
+/** JSON serialization of Type
+ *
+ * @param j JSON handle serving as destination.
+ * @param lo The language object to serialize.
+ */
 void to_json(json &j, const Variable &v) {
   to_json(j, static_cast<LanguageObject>(v));
   j["type"] = v.type_;
@@ -403,8 +520,18 @@ std::ostream &operator<<(std::ostream &stream, const Variable &v) {
   return stream;
 }
 
+/** Data member of a class.
+ *
+ * Specializes Variable class to represent member variables of
+ * classes.
+ *
+ */
 class DataMember : public Variable {
  public:
+  /** Create DataMember from libclang cursor.
+     * @param c libclang cursor representing of kind CXCursor_FieldDecl
+     * or similar.
+     */
   DataMember(CXCursor c, LanguageObject *p) : Variable(c, p) {
     // retrieve access specifier.
     CX_CXXAccessSpecifier as = clang_getCXXAccessSpecifier(c);
@@ -431,7 +558,17 @@ class DataMember : public Variable {
     }
   }
 
-  std::string get_type_spelling() const { return typename_; }
+  /** Clone member variable.
+   *
+   * @param p The new parent.
+   * @return Smart pointer to newly created clone.
+   */
+  std::shared_ptr<DataMember> clone(LanguageObject *p) {
+    std::shared_ptr<DataMember> v = std::make_shared<DataMember>(*this);
+    v->set_parent(p);
+    v->type_ = *v->type_.clone(v.get());
+    return v;
+  }
 
   friend std::ostream &operator<<(std::ostream &stream, const Variable &cl);
   friend void to_json(json &j, const DataMember &v);
@@ -442,6 +579,11 @@ class DataMember : public Variable {
   bool valid_ = true;
 };
 
+/** JSON serialization of DataMember
+ *
+ * @param j JSON handle serving as destination.
+ * @param lo The language object to serialize.
+ */
 void to_json(json &j, const DataMember &v) {
   to_json(j, static_cast<Variable>(v));
   j["access"] = to_string(v.access_specifier_);
@@ -449,18 +591,43 @@ void to_json(json &j, const DataMember &v) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Cxx Templates
+// C++ Templates
 ////////////////////////////////////////////////////////////////////////////////
 
+/** Generic template class.
+ *
+ * This class represents template of classes, function and type aliases.
+ *
+ * @tparam Base C++ AST type for which this class is a template.
+ */
 template <typename Base>
 class Template {
  public:
+
+    /** Create template.
+     *
+     * @t The definition of the template.
+     */
   Template(std::shared_ptr<Base> t) : template_(t) {}
 
+    ///  Return pointer to AST node containing the template definition.
   Base *get_base() { return template_.get(); }
 
+  /** Add template argument.
+   *
+   * This function is during parsing to add arguments to the template.
+   *
+   * @lo LanguageObject representing the template argument to add.
+   */
   void add(std::shared_ptr<LanguageObject> lo) { arguments_.push_back(lo); }
 
+  /** Return name of template instance.
+   *
+   * Adds the given template values in angle brackets to the template name.
+   *
+   * @param template_replacements Template values to insert for each template argument
+   * @return The name (spelling) of the instance of the template.
+   */
   std::string get_template_name(std::vector<std::string> template_replacements) const {
       std::stringstream ss;
       ss << template_->get_name() << "<";
@@ -474,6 +641,11 @@ class Template {
       return ss.str();
   }
 
+  /** Get template instances to export.
+   *
+   * @return Vector containing the template instances corresponding to
+   * the instances of this template.
+   */
   std::vector<std::shared_ptr<Base>> get_instances() const {
     std::vector<std::string> argument_names;
     for (auto &ta : arguments_) {
@@ -523,14 +695,30 @@ class Template {
  */
 class Function : public LanguageObject {
  public:
+    /** Create function from cursor.
+     *
+     * @param c libclang cursor of kind CXCursor_FunctionDecl or similar.
+     * @param p Pointer to parent object or nullptr for root of AST
+     */
   Function(CXCursor c, LanguageObject *p)
       : LanguageObject(c, p),
         return_type_(clang_getResultType(clang_getCursorType(c)), p->get_scope()) {
         p->get_scope()->add_name(name_);
     }
 
+  /** Add argument to function
+   * This is used during the parsing of the function definition to register
+   * its arguments.
+   * @param Smart pointer to variable object representing a function argument.
+   */
   void add(std::shared_ptr<Variable> a) { arguments_.push_back(a); }
 
+  /** Replace occurrences of template names in function argument types.
+   *
+   * @param template_names Names of the template variable to replace.
+   * @param template_values The values to replace the template variables with.
+   *
+   */
   void replace_template_variables(
       const std::vector<std::string> &template_names,
       const std::vector<std::string> &template_values) {
@@ -540,21 +728,36 @@ class Function : public LanguageObject {
     return_type_.replace_template_variables(template_names, template_values);
   }
 
+  /** Clone function object.
+   *
+   * Creates a clone of the function object on the heap and updates
+   * its parent pointer.
+   *
+   * @param p The new parent of the clone object.
+   * @return Smart pointer to cloned  function object.
+   */
   std::shared_ptr<Function> clone(LanguageObject *p = nullptr) {
     auto f = pxx::cxx::clone<Function>(*this, p);
     std::transform(f->arguments_.begin(),
                    f->arguments_.end(),
                    f->arguments_.begin(),
-                   [&f](auto a) {return a->clone(f);});
-    f->return_type_->set_scope(f->get_scope());
+                   [&f](auto a) { return a->clone(f.get()); });
+    f->return_type_ = *f->return_type_.clone(f.get());
     return f;
   }
 
+  /** Return spelling of corresponding function pointer type.
+   *
+   * Prints the function type, which is required to identify the function
+   * from potential overloads.
+   *
+   * @return The spelling of a pointer to the function.
+   */
   std::string get_pointer_type_spelling() const {
     std::stringstream ss;
     ss << "(" << return_type_.get_qualified_name() << ")(*)(";
     for (size_t i = 0; i < arguments_.size(); ++i) {
-      ss << arguments_[i]->get_qualified_name();
+      ss << arguments_[i]->get_type().get_qualified_name();
       if (i < arguments_.size() - 1) {
         ss << ", ";
       }
@@ -563,6 +766,7 @@ class Function : public LanguageObject {
     return ss.str();
   }
 
+  /// True if there exists overloads with the scope in which the function is defined.
   bool has_overload() const {
       return (parent_->get_scope()->lookup_name(name_) > 1);
   }
@@ -577,6 +781,11 @@ class Function : public LanguageObject {
 
 using FunctionTemplate = Template<Function>;
 
+/** JSON serialization of Function
+ *
+ * @param j JSON handle serving as destination.
+ * @param lo The language object to serialize.
+ */
 void to_json(json &j, const Function &f) {
     to_json(j, static_cast<LanguageObject>(f));
     j["arguments"] = f.arguments_;
@@ -585,16 +794,29 @@ void to_json(json &j, const Function &f) {
     j["pointer_type"] = f.get_pointer_type_spelling();
 }
 
+/** Class member function.
+ *
+ * Specialization of Function class to take into account the
+ * different spelling of function pointer types for general functions
+ * and class member functions.
+ */
 class MemberFunction : public Function {
  public:
   MemberFunction(CXCursor c, LanguageObject *p) : Function(c, p) {}
 
+  /** Return spelling of corresponding function pointer type.
+     *
+     * Prints the function type, which is required to identify the function
+     * from potential overloads.
+     *
+     * @return The spelling of a pointer to the function.
+     */
   std::string get_pointer_type_spelling() const {
     std::stringstream ss;
-    ss << return_type_.get_qualified_name()
-       << "(" << parent_->get_qualified_name() << "::*)(";
+    ss << return_type_.get_qualified_name() << "("
+       << parent_->get_qualified_name() << "::*)(";
     for (size_t i = 0; i < arguments_.size(); ++i) {
-      ss << arguments_[i]->get_qualified_name();
+        ss << arguments_[i]->get_type().get_qualified_name();
       if (i < arguments_.size() - 1) {
         ss << ", ";
       }
@@ -602,19 +824,61 @@ class MemberFunction : public Function {
     ss << ")";
     return ss.str();
   }
+
+  /** Clone member function object.
+   *
+   * Creates a clone of the function object on the heap and updates
+   * its parent pointer.
+   *
+   * @param p The new parent of the clone object.
+   * @return Smart pointer to cloned  function object.
+   */
+  std::shared_ptr<MemberFunction> clone(LanguageObject *p = nullptr) {
+      auto f = pxx::cxx::clone<MemberFunction>(*this, p);
+      std::transform(f->arguments_.begin(),
+                     f->arguments_.end(),
+                     f->arguments_.begin(),
+                     [&f](auto a) {return a->clone(f.get());});
+      f->return_type_ = *f->return_type_.clone(f.get());
+      return f;
+  }
 };
 
+/** JSON serialization of MemberFunction
+ *
+ * @param j JSON handle serving as destination.
+ * @param lo The language object to serialize.
+ */
 void to_json(json &j, const MemberFunction &f) {
-    to_json(j, static_cast<Function>(f));
-    j["pointer_type"] = f.get_pointer_type_spelling();
+  to_json(j, static_cast<Function>(f));
+  j["pointer_type"] = f.get_pointer_type_spelling();
 }
 
+/** Class constructor.
+ *
+ * Specialization of MemberFunction class to represent constructors.
+ */
 class Constructor : public MemberFunction {
  public:
   Constructor(CXCursor c, LanguageObject *p) : MemberFunction(c, p) {}
+  /** Clone constructor.
+    *
+    * Creates a clone of the function object on the heap and updates
+    * its parent pointer.
+    *
+    * @param p The new parent of the clone object.
+    * @return Smart pointer to cloned  function object.
+    */
+  std::shared_ptr<Constructor> clone(LanguageObject *p = nullptr) {
+    auto f = pxx::cxx::clone<Constructor>(*this, p);
+    std::transform(f->arguments_.begin(),
+                   f->arguments_.end(),
+                   f->arguments_.begin(),
+                   [&f](auto a) { return a->clone(f.get()); });
+    f->return_type_ = *f->return_type_.clone(f.get());
+    return f;
+  }
 };
-
-
 
 std::ostream &operator<<(std::ostream &stream, const Function &f) {
   stream << f.name_ << "(";
@@ -640,29 +904,59 @@ std::ostream &operator<<(std::ostream &stream, const Function &f) {
  */
 class Class : public LanguageObject {
  public:
+  /** Create class from libclang cursor.
+     *
+     * @param c libclang cursor of kind CXCursor_ClassDecl representing
+     * the class.
+     * @param p Pointer to parent object.
+     */
   Class(CXCursor c, LanguageObject *p) : LanguageObject(c, p) {}
 
-std::shared_ptr<Class> clone(LanguageObject *parent=nullptr) {
+  /** Create clone of class object.
+     *
+     * Clones the class object and updates the parent pointer.
+     * @param parent The new parent of the class object.
+     * @return The cloned class object.
+     */
+  std::shared_ptr<Class> clone(LanguageObject *parent = nullptr) {
     std::shared_ptr<Class> c = pxx::cxx::clone(*this, parent);
     std::transform(c->constructors_.begin(),
                    c->constructors_.end(),
                    c->constructors_.begin(),
-                   [c](auto a) {return pxx::cxx::clone(*a, c.get());});
+                   [c](auto a) { return a->clone(c.get()); });
     std::transform(c->member_functions_.begin(),
                    c->member_functions_.end(),
                    c->member_functions_.begin(),
-                   [c](auto a) {return pxx::cxx::clone(*a, c.get());});
+                   [c](auto a) { return a->clone(c.get()); });
     std::transform(c->data_members_.begin(),
                    c->data_members_.end(),
                    c->data_members_.begin(),
-                   [c](auto a) {return pxx::cxx::clone(*a, c.get());});
+                   [c](auto a) { return a->clone(c.get()); });
     return c;
   }
 
+  /** Add constructor to class.
+     *
+     * Used for parsing the class from the clang AST.
+     *
+     * @param c The constructor object representing the parsed constructor.
+     */
   void add(std::shared_ptr<Constructor> c) { constructors_.push_back(c); }
+  /** Add member function to class.
+   *
+   * Used for parsing the class from the clang AST.
+   *
+   * @param c The member function object representing the parsed member function.
+   */
   void add(std::shared_ptr<MemberFunction> c) {
     member_functions_.push_back(c);
   }
+  /** Add member data member to class.
+   *
+   * Used for parsing the class from the clang AST.
+   *
+   * @param c The member data member object representing the parsed data member.
+   */
   void add(std::shared_ptr<DataMember> m) { data_members_.push_back(m); }
 
   void replace_template_variables(
@@ -679,6 +973,9 @@ std::shared_ptr<Class> clone(LanguageObject *parent=nullptr) {
     }
   }
 
+  /** Get exported class methods.
+   * @return Vector containing the class methods exported by this class.
+   */
   std::vector<std::shared_ptr<Function>> get_exported_methods() const {
     std::vector<std::shared_ptr<Function>> exports;
     std::copy_if(member_functions_.begin(),
@@ -690,6 +987,9 @@ std::shared_ptr<Class> clone(LanguageObject *parent=nullptr) {
     return exports;
   }
 
+  /** Get exported constructors
+   * @return Vector containing the constructors exported by this class.
+   */
   std::vector<std::shared_ptr<Function>> get_exported_constructors() const {
     std::vector<std::shared_ptr<Function>> exports;
     std::copy_if(constructors_.begin(),
@@ -701,7 +1001,10 @@ std::shared_ptr<Class> clone(LanguageObject *parent=nullptr) {
     return exports;
   }
 
-  std::vector<std::shared_ptr<DataMember>> get_exported_variables() const {
+  /** Get exported variables
+   * @return Vector containing the data members exported by this class.
+   */
+  std::vector<std::shared_ptr<DataMember>> get_exported_data_members() const {
     std::vector<std::shared_ptr<DataMember>> exports;
     std::copy_if(data_members_.begin(),
                  data_members_.end(),
