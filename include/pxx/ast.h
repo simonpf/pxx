@@ -84,7 +84,7 @@ struct AstFormatter {
 class AST {
  public:
   AST(CXCursor c, ExportSettings s = ExportSettings())
-      : root_scope_(cxx::parse<cxx::Namespace>(c, s)) {}
+      : root_cursor_(c), root_scope_(cxx::parse<cxx::Namespace>(c, s)) {}
   friend std::ostream &operator<<(std::ostream &stream, const AST &tu);
 
   bool uses_standard_headers() { return root_scope_->uses_std(); }
@@ -103,8 +103,8 @@ class AST {
   friend void to_json(json &j, const AST &ast);
 
  private:
-  std::shared_ptr<cxx::Namespace> root_scope_;
   CXCursor root_cursor_;
+  std::shared_ptr<cxx::Namespace> root_scope_;
 };
 
 std::ostream &operator<<(std::ostream &stream, const AST &ast) {

@@ -18,6 +18,11 @@ std::ostream &operator<<(std::ostream &stream, const CXCursor &c) {
   return stream;
 }
 
+std::ostream &operator<<(std::ostream &stream, const CXType &t) {
+    stream << clang_getTypeSpelling(t);
+    return stream;
+}
+
 std::ostream &operator<<(std::ostream &stream, const CXCursorKind &k) {
   stream << clang_getCursorKindSpelling(k);
   return stream;
