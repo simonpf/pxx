@@ -111,6 +111,12 @@ std::string get_name(CXCursor c) {
   return pxx::to_string(s);
 }
 
+template <typename T, typename S>
+void set_parents(std::vector<std::shared_ptr<T>> &ts, S *ptr) {
+  for (auto &t : ts) {
+    t->set_parent(ptr);
+  }
+}
 
 }  // namespace detail
 
@@ -130,11 +136,7 @@ class Type;
 class Scope {
  public:
   Scope(std::string name, Scope *parent_scope)
-      : name_(name), parent_scope_(parent_scope) {
-
-
-    }
-
+      : name_(name), parent_scope_(parent_scope) {} 
   std::string get_name() {return name_;}
   void set_name(std::string s) {name_ = s;}
   void add_name(std::string name) { names_.push_back(name); }
@@ -191,7 +193,7 @@ class Scope {
   std::pair<std::vector<std::string>, std::vector<std::string>>
   get_type_replacements() {
     std::vector<std::string> names{}, replacements{};
-    if (parent_scope_) {
+    if (parent_scope_ && (parent_scope_ != this)) {
       std::tie(names, replacements) = parent_scope_->get_type_replacements();
     }
     names.insert(names.end(), type_names_.begin(), type_names_.end());
@@ -203,7 +205,7 @@ class Scope {
 
   std::string get_prefix() {
     std::string name = "";
-    if (parent_scope_) {
+    if (parent_scope_ && (parent_scope_ != this)) {
       name += parent_scope_->get_prefix();
     }
     if (name_ != "") {
@@ -743,6 +745,10 @@ class Template {
     return stream;
   }
 
+  void set_parent(LanguageObject *parent) {
+      template_->set_parent(parent);
+  }
+
  protected:
   std::shared_ptr<Base> template_ = nullptr;
   std::vector<std::shared_ptr<LanguageObject>> arguments_ = {};
@@ -912,7 +918,8 @@ void to_json(json &j, const Function &f) {
  */
 class MemberFunction : public Function {
  public:
-  MemberFunction(CXCursor c, LanguageObject *p) : Function(c, p) {}
+  MemberFunction(CXCursor c, LanguageObject *p) : Function(c, p) {
+    }
 
   /** Return spelling of corresponding function pointer type.
      *
@@ -1248,19 +1255,25 @@ class Namespace : public LanguageObject {
 
   void join(const Namespace &other) {
     auto other_classes = other.get_classes();
+    detail::set_parents(other_classes, this);
     classes_.insert(classes_.end(), other_classes.begin(), other_classes.end());
+
     auto other_class_templates = other.get_class_templates();
+    detail::set_parents(other_class_templates, this);
     class_templates_.insert(class_templates_.end(),
                             other_class_templates.begin(),
                             other_class_templates.end());
     auto other_functions = other.get_functions();
+    detail::set_parents(other_functions, this);
     functions_.insert(
         functions_.end(), other_functions.begin(), other_functions.end());
     auto other_function_templates = other.get_function_templates();
+    detail::set_parents(other_function_templates, this);
     function_templates_.insert(function_templates_.end(),
                                other_function_templates.begin(),
                                other_function_templates.end());
     auto other_namespaces = other.get_namespaces();
+    detail::set_parents(other_namespaces, this);
     namespaces_.insert(
         namespaces_.end(), other_namespaces.begin(), other_namespaces.end());
   }
