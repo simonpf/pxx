@@ -22,8 +22,8 @@
 namespace pxx {
 namespace cxx {
 
-using pxx::comment_parser::ExportSettings;
 using pxx::comment_parser::CommentParser;
+using pxx::comment_parser::ExportSettings;
 using pxx::operator<<;
 using json = nlohmann::json;
 
@@ -136,9 +136,9 @@ class Type;
 class Scope {
  public:
   Scope(std::string name, Scope *parent_scope)
-      : name_(name), parent_scope_(parent_scope) {} 
-  std::string get_name() {return name_;}
-  void set_name(std::string s) {name_ = s;}
+      : name_(name), parent_scope_(parent_scope) {}
+  std::string get_name() { return name_; }
+  void set_name(std::string s) { name_ = s; }
   void add_name(std::string name) { names_.push_back(name); }
 
   size_t lookup_name(std::string name) {
@@ -153,9 +153,7 @@ class Scope {
     return count;
   }
 
-  void set_parent(Scope *p) {
-      parent_scope_ = p;
-  }
+  void set_parent(Scope *p) { parent_scope_ = p; }
 
   void add_type_name(std::string name, std::string value) {
     auto it = std::find(type_names_.begin(), type_names_.end(), name);
@@ -198,8 +196,8 @@ class Scope {
     }
     names.insert(names.end(), type_names_.begin(), type_names_.end());
     replacements.insert(replacements.end(),
-                       type_replacements_.begin(),
-                       type_replacements_.end());
+                        type_replacements_.begin(),
+                        type_replacements_.end());
     return std::make_pair(names, replacements);
   }
 
@@ -286,14 +284,14 @@ class LanguageObject {
   }
 
   /// Get parent pointer.
-  LanguageObject * get_parent() {return parent_;}
-  const LanguageObject * get_parent() const {return parent_;}
+  LanguageObject *get_parent() { return parent_; }
+  const LanguageObject *get_parent() const { return parent_; }
   /** Set parent pointer of object.
    * @param lo Pointer to new parent.
    */
   void set_parent(LanguageObject *lo) {
-      parent_ = lo;
-      scope_.set_parent(lo->get_scope());
+    parent_ = lo;
+    scope_.set_parent(lo->get_scope());
   }
   /** Qualified name of language object.
      *
@@ -399,8 +397,7 @@ class Type {
      * @param t CXType to represent.
      * @param p Scope  which the type should be interpreted.
      */
-    Type(CXType t, Scope *p) : type_(t), scope_(p) {
-
+  Type(CXType t, Scope *p) : type_(t), scope_(p) {
     name_ = to_string(clang_getTypeSpelling(type_));
 
     is_pointer_ = (type_.kind == CXType_Pointer);
@@ -409,7 +406,7 @@ class Type {
     is_const_ = clang_isConstQualifiedType(type_);
   }
 
- /** Create type object from libclang cursor.
+  /** Create type object from libclang cursor.
    * @param c Cursor pointing to typed object.
    * @param p Scope  which the type should be interpreted.
    */
@@ -435,20 +432,21 @@ class Type {
 
   /// The type's name that identifies it at root scope.
   std::string get_qualified_name() const {
-      std::vector<std::string> names, values;
-      std::tie(names, values) = scope_->get_type_replacements();
-      std::string qualified_name = detail::replace_names(get_unqualified_name(), names, values);
-      return qualified_name;
+    std::vector<std::string> names, values;
+    std::tie(names, values) = scope_->get_type_replacements();
+    std::string qualified_name =
+        detail::replace_names(get_unqualified_name(), names, values);
+    return qualified_name;
   }
 
   std::string get_unqualified_name() const {
-      std::regex re("([a-zA-Z_][a-zA-Z0-9_]*::)*([a-zA-Z_][a-zA-Z0-9_]*)");
-      std::smatch match;
-      bool found = regex_match(name_, match, re);
-      if (found) {
-          return match[2];
-      }
-      return name_;
+    std::regex re("([a-zA-Z_][a-zA-Z0-9_]*::)*([a-zA-Z_][a-zA-Z0-9_]*)");
+    std::smatch match;
+    bool found = regex_match(name_, match, re);
+    if (found) {
+      return match[2];
+    }
+    return name_;
   }
   /** Replace template variables in type names.
    *
@@ -472,10 +470,10 @@ class Type {
   /// Is the type a r-value reference?
   bool is_rvalue_reference() const { return is_rvalue_reference_; }
   /// Set scope in which the type is defined.
-  void set_scope(Scope *s) {scope_ = s;}
+  void set_scope(Scope *s) { scope_ = s; }
 
   friend std::ostream &operator<<(std::ostream &stream, const Type &t);
-  friend bool operator==(const Type&, const Type&);
+  friend bool operator==(const Type &, const Type &);
 
  protected:
   std::string name_;
@@ -489,7 +487,7 @@ class Type {
 };
 
 bool operator==(const Type &l, const Type &r) {
-    return clang_equalTypes(l.type_, r.type_);
+  return clang_equalTypes(l.type_, r.type_);
 }
 
 /** JSON serialization of Type
@@ -524,7 +522,7 @@ class Variable : public LanguageObject {
   Variable(CXCursor c, LanguageObject *p)
       : LanguageObject(c, p), type_(c, p->get_scope()) {}
 
-  Type get_type(){ return type_;}
+  Type get_type() { return type_; }
   /// Return name (spelling) of the variable's type.
   std::string get_typename() const { return type_.get_name(); }
 
@@ -668,14 +666,13 @@ void to_json(json &j, const DataMember &v) {
 template <typename Base>
 class Template {
  public:
-
-    /** Create template.
+  /** Create template.
      *
      * @t The definition of the template.
      */
   Template(std::shared_ptr<Base> t) : template_(t) {}
 
-    ///  Return pointer to AST node containing the template definition.
+  ///  Return pointer to AST node containing the template definition.
   Base *get_base() { return template_.get(); }
 
   /** Add template argument.
@@ -693,17 +690,18 @@ class Template {
    * @param template_replacements Template values to insert for each template argument
    * @return The name (spelling) of the instance of the template.
    */
-  std::string get_template_name(std::vector<std::string> template_replacements) const {
-      std::stringstream ss;
-      ss << template_->get_name() << "<";
-      for (size_t i = 0; i < template_replacements.size(); ++i) {
-          ss << template_replacements[i];
-          if (i < template_replacements.size() - 1) {
-              ss << ",";
-          }
+  std::string get_template_name(
+      std::vector<std::string> template_replacements) const {
+    std::stringstream ss;
+    ss << template_->get_name() << "<";
+    for (size_t i = 0; i < template_replacements.size(); ++i) {
+      ss << template_replacements[i];
+      if (i < template_replacements.size() - 1) {
+        ss << ",";
       }
-      ss << ">";
-      return ss.str();
+    }
+    ss << ">";
+    return ss.str();
   }
 
   /** Get template instances to export.
@@ -726,7 +724,8 @@ class Template {
       auto template_instance = template_->clone();
       template_instance->set_export_name(export_name);
       template_instance->set_name(get_template_name(std::get<1>(is)));
-      template_instance->replace_template_variables(argument_names, std::get<1>(is));
+      template_instance->replace_template_variables(argument_names,
+                                                    std::get<1>(is));
       instances.push_back(template_instance);
     }
     return instances;
@@ -745,9 +744,7 @@ class Template {
     return stream;
   }
 
-  void set_parent(LanguageObject *parent) {
-      template_->set_parent(parent);
-  }
+  void set_parent(LanguageObject *parent) { template_->set_parent(parent); }
 
  protected:
   std::shared_ptr<Base> template_ = nullptr;
@@ -770,16 +767,19 @@ class TypeAlias : public LanguageObject {
       : LanguageObject(c, p),
         usr_(to_string(clang_getCursorUSR(c))),
         type_(c, p->get_scope()),
-        underlying_type_(clang_getTypedefDeclUnderlyingType(c), p->get_scope()) {
+        underlying_type_(clang_getTypedefDeclUnderlyingType(c),
+                         p->get_scope()) {
     p->get_scope()->register_type(to_string(clang_getCursorUSR(c)), &type_);
-    p->get_scope()->add_type_name(type_.get_unqualified_name(), underlying_type_.get_qualified_name());
+    p->get_scope()->add_type_name(type_.get_unqualified_name(),
+                                  underlying_type_.get_qualified_name());
   }
 
   void update_reference(Type *type_ptr) {
-      if ((type_ptr) && (underlying_type_ == *type_ptr)) {
-          underlying_type_ = *type_ptr;
-          parent_->get_scope()->add_type_name(name_, underlying_type_.get_qualified_name());
-      }
+    if ((type_ptr) && (underlying_type_ == *type_ptr)) {
+      underlying_type_ = *type_ptr;
+      parent_->get_scope()->add_type_name(
+          name_, underlying_type_.get_qualified_name());
+    }
   }
 
   std::shared_ptr<TypeAlias> clone(LanguageObject *p) {
@@ -791,8 +791,10 @@ class TypeAlias : public LanguageObject {
 
   void replace_template_variables(const std::vector<std::string> &names,
                                   const std::vector<std::string> &values) {
-      std::string qualified_name = detail::replace_names(underlying_type_.get_qualified_name(), names, values);
-      parent_->get_scope()->add_type_name(type_.get_unqualified_name(), qualified_name);
+    std::string qualified_name = detail::replace_names(
+        underlying_type_.get_qualified_name(), names, values);
+    parent_->get_scope()->add_type_name(type_.get_unqualified_name(),
+                                        qualified_name);
   }
 
  protected:
@@ -811,16 +813,17 @@ class TypeAlias : public LanguageObject {
  */
 class Function : public LanguageObject {
  public:
-    /** Create function from cursor.
+  /** Create function from cursor.
      *
      * @param c libclang cursor of kind CXCursor_FunctionDecl or similar.
      * @param p Pointer to parent object or nullptr for root of AST
      */
   Function(CXCursor c, LanguageObject *p)
       : LanguageObject(c, p),
-        return_type_(clang_getResultType(clang_getCursorType(c)), p->get_scope()) {
-        p->get_scope()->add_name(name_);
-    }
+        return_type_(clang_getResultType(clang_getCursorType(c)),
+                     p->get_scope()) {
+    p->get_scope()->add_name(name_);
+  }
 
   /** Add argument to function
    * This is used during the parsing of the function definition to register
@@ -872,19 +875,20 @@ class Function : public LanguageObject {
   std::string get_pointer_type_spelling() const {
     std::stringstream ss;
     ss << "(" << return_type_.get_qualified_name() << ")(*)(";
-    for (size_t i = 0; i < arguments_.size(); ++i) ({
-            ss << (arguments_)[i]->get_type().get_qualified_name();
-            if (i < arguments_.size() - 1) {
-                ss << ", ";
-            }
-        });
+    for (size_t i = 0; i < arguments_.size(); ++i)
+      ({
+        ss << (arguments_)[i]->get_type().get_qualified_name();
+        if (i < arguments_.size() - 1) {
+          ss << ", ";
+        }
+      });
     ss << ")";
     return ss.str();
   }
 
   /// True if there exists overloads with the scope in which the function is defined.
   bool has_overload() const {
-      return (parent_->get_scope()->lookup_name(name_) > 1);
+    return (parent_->get_scope()->lookup_name(name_) > 1);
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const Function &cl);
@@ -903,11 +907,11 @@ using FunctionTemplate = Template<Function>;
  * @param lo The language object to serialize.
  */
 void to_json(json &j, const Function &f) {
-    to_json(j, static_cast<LanguageObject>(f));
-    j["arguments"] = f.arguments_;
-    j["return_type"] = f.return_type_;
-    j["has_overload"] = f.has_overload();
-    j["pointer_type"] = f.get_pointer_type_spelling();
+  to_json(j, static_cast<LanguageObject>(f));
+  j["arguments"] = f.arguments_;
+  j["return_type"] = f.return_type_;
+  j["has_overload"] = f.has_overload();
+  j["pointer_type"] = f.get_pointer_type_spelling();
 }
 
 /** Class member function.
@@ -918,8 +922,7 @@ void to_json(json &j, const Function &f) {
  */
 class MemberFunction : public Function {
  public:
-  MemberFunction(CXCursor c, LanguageObject *p) : Function(c, p) {
-    }
+  MemberFunction(CXCursor c, LanguageObject *p) : Function(c, p) {}
 
   /** Return spelling of corresponding function pointer type.
      *
@@ -933,7 +936,7 @@ class MemberFunction : public Function {
     ss << return_type_.get_qualified_name() << "("
        << parent_->get_qualified_name() << "::*)(";
     for (size_t i = 0; i < arguments_.size(); ++i) {
-        ss << arguments_[i]->get_type().get_qualified_name();
+      ss << arguments_[i]->get_type().get_qualified_name();
       if (i < arguments_.size() - 1) {
         ss << ", ";
       }
@@ -951,13 +954,13 @@ class MemberFunction : public Function {
    * @return Smart pointer to cloned  function object.
    */
   std::shared_ptr<MemberFunction> clone(LanguageObject *p = nullptr) {
-      auto f = pxx::cxx::clone<MemberFunction>(*this, p);
-      std::transform(f->arguments_.begin(),
-                     f->arguments_.end(),
-                     f->arguments_.begin(),
-                     [&f](auto a) {return a->clone(f.get());});
-      f->return_type_ = *f->return_type_.clone(f.get());
-      return f;
+    auto f = pxx::cxx::clone<MemberFunction>(*this, p);
+    std::transform(f->arguments_.begin(),
+                   f->arguments_.end(),
+                   f->arguments_.begin(),
+                   [&f](auto a) { return a->clone(f.get()); });
+    f->return_type_ = *f->return_type_.clone(f.get());
+    return f;
   }
 };
 
@@ -1035,11 +1038,11 @@ class Class : public LanguageObject {
     p->get_scope()->register_type(usr_, &type_);
   }
 
-    void set_name(std::string n) {
-        std::string old_name = name_;
-        LanguageObject::set_name(n);
-        parent_->get_scope()->add_type_name(old_name, get_qualified_name());
-    }
+  void set_name(std::string n) {
+    std::string old_name = name_;
+    LanguageObject::set_name(n);
+    parent_->get_scope()->add_type_name(old_name, get_qualified_name());
+  }
 
   /** Create clone of class object.
      *
@@ -1093,9 +1096,7 @@ class Class : public LanguageObject {
    */
   void add(std::shared_ptr<DataMember> m) { data_members_.push_back(m); }
 
-  void add(std::shared_ptr<TypeAlias> t) {
-      type_aliases_.push_back(t);
-  }
+  void add(std::shared_ptr<TypeAlias> t) { type_aliases_.push_back(t); }
 
   void replace_template_variables(
       const std::vector<std::string> &template_names,
@@ -1110,7 +1111,7 @@ class Class : public LanguageObject {
       d->replace_template_variables(template_names, template_arguments);
     }
     for (auto &t : type_aliases_) {
-        t->replace_template_variables(template_names, template_arguments);
+      t->replace_template_variables(template_names, template_arguments);
     }
   }
 
@@ -1204,7 +1205,11 @@ std::ostream &operator<<(std::ostream &stream, const Class &cl) {
 class Namespace : public LanguageObject {
  public:
   Namespace(CXCursor cursor, LanguageObject *parent)
-      : LanguageObject(cursor, parent) {}
+      : LanguageObject(cursor, parent) {
+    if (parent) {
+      parent->get_scope()->add_type_name(name_, get_qualified_name());
+    }
+  }
 
   /// Add class to namespace.
   void add(std::shared_ptr<Class> cl) { classes_.push_back(cl); }
@@ -1457,12 +1462,12 @@ struct Parser<Template<T>> {
 };
 
 template <>
-    struct Parser<LanguageObject> {
-    static CXChildVisitResult parse_impl(CXCursor /*c*/,
-                                         CXCursor /*p*/,
-                                         CXClientData /*client_data*/) {
-        return CXChildVisit_Continue;
-    }
+struct Parser<LanguageObject> {
+  static CXChildVisitResult parse_impl(CXCursor /*c*/,
+                                       CXCursor /*p*/,
+                                       CXClientData /*client_data*/) {
+    return CXChildVisit_Continue;
+  }
 };
 
 template <>
@@ -1540,23 +1545,23 @@ struct Parser<Variable> {
 };
 
 template <>
-    struct Parser<TypeAlias> {
-    static CXChildVisitResult parse_impl(CXCursor c,
-                                         CXCursor /*p*/,
-                                         CXClientData client_data) {
-        TypeAlias *ta = reinterpret_cast<TypeAlias *>(client_data);
-        CXCursorKind k = clang_getCursorKind(c);
-        switch (k) {
-        case CXCursor_TypeRef: {
-            CXCursor cr = clang_getCursorReferenced(c);
-            std::string usr = to_string(clang_getCursorUSR(cr));
-            ta->update_reference(ta->get_scope()->lookup_type(usr));
-        } break;
-        default:
-            break;
-        }
-        return CXChildVisit_Continue;
+struct Parser<TypeAlias> {
+  static CXChildVisitResult parse_impl(CXCursor c,
+                                       CXCursor /*p*/,
+                                       CXClientData client_data) {
+    TypeAlias *ta = reinterpret_cast<TypeAlias *>(client_data);
+    CXCursorKind k = clang_getCursorKind(c);
+    switch (k) {
+      case CXCursor_TypeRef: {
+        CXCursor cr = clang_getCursorReferenced(c);
+        std::string usr = to_string(clang_getCursorUSR(cr));
+        ta->update_reference(ta->get_scope()->lookup_type(usr));
+      } break;
+      default:
+        break;
     }
+    return CXChildVisit_Continue;
+  }
 };
 
 template <>
