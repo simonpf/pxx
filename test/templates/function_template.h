@@ -1,3 +1,8 @@
+/** Test function template wrapper.
+ *
+ * Input file with different function templates to test the wrapping of
+ * function templates.
+ */
 #include <iostream>
 #include <array>
 
@@ -26,9 +31,8 @@ namespace detail {
     }
     return result;
     }
-}
 
-template float sum(std::array<float, 3>);
+}
 
 // pxx :: export
 void test(int /*a*/) {

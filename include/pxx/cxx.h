@@ -52,29 +52,37 @@ std::string replace_names(std::string name,
   std::regex_search(name, match, re);
   std::stringstream output{};
 
-  while (!match.empty()) {
-    std::string ms = match[2];
+  bool any_match = true;
 
-    // Copy what didn't match.
-    output << match.prefix();
-    output << match[1];
+  while (any_match) {
+    any_match = false;
 
-    bool matched = false;
-    for (int i = 0; i < static_cast<int>(names.size()); ++i) {
-      const std::string &n = names[i];
-      if (n == ms) {
-        // Replace match.
-        output << values[i];
-        matched = true;
-        break;
+    while (!match.empty()) {
+      std::string ms = match[2];
+
+      // Copy what didn't match.
+      output << match.prefix();
+      output << match[1];
+
+      bool matched = false;
+      for (int i = 0; i < static_cast<int>(names.size()); ++i) {
+        const std::string &n = names[i];
+
+        if (n == ms) {
+          // Replace match.
+          output << values[i];
+          matched = true;
+          any_match = true;
+          break;
+        }
       }
+      // If didn't match, keep string.
+      if (!matched) {
+        output << ms;
+      }
+      input = match.suffix();
+      std::regex_search(input, match, re);
     }
-    // If didn't match, keep string.
-    if (!matched) {
-      output << ms;
-    }
-    input = match.suffix();
-    std::regex_search(input, match, re);
   }
   output << input;
   return output.str();
@@ -428,19 +436,30 @@ class Type {
   }
 
   /// The type's name.
-  std::string get_name() const { return name_; }
+  std::string get_name() const {
+    // libclang returns inconsistent type names in class template specializations.
+    // This deals with this issue.
+    if (name_.find('-') < name_.size()) {
+      return get_unqualified_name();
+    }
+    return name_;
+  }
 
   /// The type's name that identifies it at root scope.
   std::string get_qualified_name() const {
     std::vector<std::string> names, values;
     std::tie(names, values) = scope_->get_type_replacements();
     std::string qualified_name =
-        detail::replace_names(get_unqualified_name(), names, values);
+        detail::replace_names(get_name(), names, values);
     return qualified_name;
   }
 
   std::string get_unqualified_name() const {
-    std::regex re("([a-zA-Z_][a-zA-Z0-9_]*::)*([a-zA-Z_][a-zA-Z0-9_]*)");
+    std::regex re("[-a-zA-Z0-9_][-a-zA-Z0-9, :<>_]*::");
+    return std::regex_replace(name_, re, "");
+    size_t p = name_.find_last_of(':');
+    return std::string(name_, p + 1, name_.size() - p - 1);
+    //std::regex re("([a-zA-Z_][a-zA-Z0-9_]*::)*([a-zA-Z_][a-zA-Z0-9_]*)");
     std::smatch match;
     bool found = regex_match(name_, match, re);
     if (found) {
@@ -672,6 +691,8 @@ class Template {
      */
   Template(std::shared_ptr<Base> t) : template_(t) {}
 
+  virtual ~Template() = default;
+
   ///  Return pointer to AST node containing the template definition.
   Base *get_base() { return template_.get(); }
 
@@ -683,6 +704,14 @@ class Template {
    */
   void add(std::shared_ptr<LanguageObject> lo) { arguments_.push_back(lo); }
 
+  std::vector<std::string> get_template_arguments() const {
+    std::vector<std::string> template_arguments;
+    for (auto &ta : arguments_) {
+      template_arguments.push_back(ta->get_name());
+    }
+    return template_arguments;
+  }
+
   /** Return name of template instance.
    *
    * Adds the given template values in angle brackets to the template name.
@@ -690,7 +719,7 @@ class Template {
    * @param template_replacements Template values to insert for each template argument
    * @return The name (spelling) of the instance of the template.
    */
-  std::string get_template_name(
+  virtual std::string get_template_name(
       std::vector<std::string> template_replacements) const {
     std::stringstream ss;
     ss << template_->get_name() << "<";
@@ -710,10 +739,7 @@ class Template {
    * the instances of this template.
    */
   std::vector<std::shared_ptr<Base>> get_instances() const {
-    std::vector<std::string> argument_names;
-    for (auto &ta : arguments_) {
-      argument_names.push_back(ta->get_name());
-    }
+    auto template_arguments = get_template_arguments();
     std::vector<std::shared_ptr<Base>> instances{};
     auto settings = template_->get_export_settings();
     for (auto &is : settings.instance_strings) {
@@ -724,7 +750,7 @@ class Template {
       auto template_instance = template_->clone();
       template_instance->set_export_name(export_name);
       template_instance->set_name(get_template_name(std::get<1>(is)));
-      template_instance->replace_template_variables(argument_names,
+      template_instance->replace_template_variables(template_arguments,
                                                     std::get<1>(is));
       instances.push_back(template_instance);
     }
@@ -749,6 +775,33 @@ class Template {
  protected:
   std::shared_ptr<Base> template_ = nullptr;
   std::vector<std::shared_ptr<LanguageObject>> arguments_ = {};
+};
+
+template <typename Base>
+class TemplateSpecialization : public Template<Base> {
+ public:
+  using Template<Base>::get_template_arguments;
+  /** Create template.
+     *
+     * @t The definition of the template.
+     */
+  TemplateSpecialization(CXCursor c, std::shared_ptr<Base> t)
+      : Template<Base>(t) {
+    template_name_ = to_string(clang_getCursorDisplayName(c));
+    template_name_ = std::string(template_name_, 0, template_name_.find('('));
+  }
+
+  std::string get_template_name(
+      std::vector<std::string> template_replacements) const {
+    auto template_arguments = get_template_arguments();
+    std::string template_name = template_name_;
+    template_name = detail::replace_names(
+        template_name_, template_arguments, template_replacements);
+    return template_name;
+  }
+
+ protected:
+  std::string template_name_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -874,10 +927,10 @@ class Function : public LanguageObject {
    */
   std::string get_pointer_type_spelling() const {
     std::stringstream ss;
-    ss << "(" << return_type_.get_qualified_name() << ")(*)(";
+    ss << "(" << return_type_.get_name() << ")(*)(";
     for (size_t i = 0; i < arguments_.size(); ++i)
       ({
-        ss << (arguments_)[i]->get_type().get_qualified_name();
+        ss << (arguments_)[i]->get_type().get_name();
         if (i < arguments_.size() - 1) {
           ss << ", ";
         }
@@ -1170,6 +1223,7 @@ class Class : public LanguageObject {
 };
 
 using ClassTemplate = Template<Class>;
+using ClassTemplateSpecialization = TemplateSpecialization<Class>;
 
 void to_json(json &j, const Class &c) {
   to_json(j, static_cast<LanguageObject>(c));
@@ -1491,6 +1545,12 @@ struct Parser<Namespace> {
         clang_visitChildren(c, Parser<FunctionTemplate>::parse_impl, t.get());
         ns->add(t);
       } break;
+      case CXCursor_ClassTemplatePartialSpecialization: {
+        auto f = parse<Class>(c, ns);
+        auto t = std::make_shared<ClassTemplateSpecialization>(c, f);
+        clang_visitChildren(c, Parser<ClassTemplate>::parse_impl, t.get());
+        ns->add(t);
+      } break;
       case CXCursor_ClassTemplate: {
         auto f = parse<Class>(c, ns);
         auto t = std::make_shared<ClassTemplate>(f);
@@ -1505,7 +1565,7 @@ struct Parser<Namespace> {
     }
     return CXChildVisit_Continue;
   }
-};
+};  // namespace detail
 
 /// parser specialization for classes.
 template <>

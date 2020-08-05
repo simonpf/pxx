@@ -1,3 +1,8 @@
+/** Test class template wrapper.
+ *
+ * Input file with different function templates to test the wrapping of
+ * class templates.
+ */
 #include <array>
 
 #define ARRAY std::array<T, N>
@@ -21,7 +26,7 @@ template <typename T, int N>
 class Sum {
 
 public:
-    using ReturnType = decltype(static_cast<T>(1.0));
+    using ReturnType = decltype(static_cast<T>(0.0));
     using A = typename detail::B::Alias;
 
   Sum() {
@@ -40,3 +45,33 @@ public:
  private:
   std::array<std::array<ReturnType, N>, N> data;
 };
+
+//
+// Partial specialization.
+//
+
+/**
+ * Partial specialization of Sum class.
+ */
+// pxx :: export
+// pxx :: instance("Sum1", ["int"])
+template <typename T>
+class Sum<T, 1> {
+ public:
+
+  using ReturnType = decltype(static_cast<T>(2.0));
+  using A = typename detail::B::Alias;
+
+  Sum() : data(0), public_data() {}
+  ReturnType  get_data(int a) { return data; }
+  ReturnType get_data() { return data; }
+
+  int get(int a) { return a; }
+  A get() { return A{}; }
+
+  ReturnType public_data;
+
+ private:
+  ReturnType data;
+};
+

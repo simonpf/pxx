@@ -20,7 +20,7 @@ add_custom_target(pxx_python
   ALL
   COMMAND ${Python_EXECUTABLE} setup.py build
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  DEPENDS pxx pxx/__init__.py pxx/__main__.py
+  DEPENDS pxx/__init__.py pxx/__main__.py
   COMMENT "Building pxx Python package.")
 
 #
