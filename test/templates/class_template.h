@@ -18,6 +18,13 @@ namespace detail {
     public:
         using Alias = A;
     };
+
+    enum class Test{test};
+    // pxx :: export
+    class TestClass {
+    public:
+        TestClass(Test t) {}
+    };
 }
 
 // pxx :: export

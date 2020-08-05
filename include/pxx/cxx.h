@@ -199,7 +199,7 @@ class Scope {
   std::pair<std::vector<std::string>, std::vector<std::string>>
   get_type_replacements() {
     std::vector<std::string> names{}, replacements{};
-    if (parent_scope_ && (parent_scope_ != this)) {
+    if (parent_scope_) {
       std::tie(names, replacements) = parent_scope_->get_type_replacements();
     }
     names.insert(names.end(), type_names_.begin(), type_names_.end());
@@ -218,6 +218,13 @@ class Scope {
       name += name_ + "::";
     }
     return name;
+  }
+
+  void join(Scope &other) {
+      names_.insert(names_.end(), other.names_.begin(), other.names_.end());
+      type_names_.insert(type_names_.end(), other.type_names_.begin(), other.type_names_.end());
+      type_replacements_.insert(type_replacements_.end(), other.type_replacements_.begin(), other.type_replacements_.end());
+      user_defined_types_.merge(other.user_defined_types_);
   }
 
  protected:
@@ -689,7 +696,8 @@ class Template {
      *
      * @t The definition of the template.
      */
-  Template(std::shared_ptr<Base> t) : template_(t) {}
+  Template(std::shared_ptr<Base> t) : template_(t) {
+    }
 
   virtual ~Template() = default;
 
@@ -797,15 +805,25 @@ class TemplateSpecialization : public Template<Base> {
     std::string template_name = template_name_;
     template_name = detail::replace_names(
         template_name_, template_arguments, template_replacements);
+
+    std::vector<std::string> names, values;
+    std::tie(names, values) = template_->get_scope()->get_type_replacements();
+    size_t p = std::find(names.begin(), names.end(), template_->get_name()) - names.begin();
+    names.erase(names.begin() + p, names.begin() + p + 1);
+    values.erase(values.begin() + p, values.begin() + p + 1);
+    template_name = detail::replace_names(template_name, names, values);
+
+
     return template_name;
   }
 
  protected:
+  using Template<Base>::template_;
   std::string template_name_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// Type alias
+// Type aliases
 ////////////////////////////////////////////////////////////////////////////////
 
 /** Type alias
@@ -854,6 +872,48 @@ class TypeAlias : public LanguageObject {
   std::string usr_;
   Type type_;
   Type underlying_type_;
+};
+
+/** Template alias
+ *
+ * A template type alias created using a 'using'.
+ */
+class TemplateAlias : public LanguageObject {
+ public:
+  TemplateAlias(CXCursor c, LanguageObject *p)
+      : LanguageObject(c, p) {
+    p->get_scope()->add_type_name(name_, get_qualified_name());
+  }
+
+  std::shared_ptr<TemplateAlias> clone(LanguageObject *p) {
+    auto ta_new = pxx::cxx::clone(*this, p);
+    return ta_new;
+  }
+
+  void replace_template_variables(const std::vector<std::string> &names,
+                                  const std::vector<std::string> &values) {
+    std::string qualified_name = detail::replace_names(get_qualified_name(), names, values);
+    parent_->get_scope()->add_type_name(name_,
+                                        qualified_name);
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Enum
+////////////////////////////////////////////////////////////////////////////////
+
+/** An Enum declaration
+ *
+ * Enums are named entities so we have to keep track of them in order
+ * to get their names right.
+ */
+class Enum : public LanguageObject {
+ public:
+  Enum(CXCursor c, LanguageObject *p)
+      : LanguageObject(c, p) {
+        p->get_scope()->add_type_name(get_name(), get_qualified_name());
+  }
+
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1122,6 +1182,10 @@ class Class : public LanguageObject {
                    c->type_aliases_.end(),
                    c->type_aliases_.begin(),
                    [c](auto a) { return a->clone(c.get()); });
+    std::transform(c->template_aliases_.begin(),
+                   c->template_aliases_.end(),
+                   c->template_aliases_.begin(),
+                   [c](auto a) { return a->clone(c.get()); });
     return c;
   }
 
@@ -1151,6 +1215,8 @@ class Class : public LanguageObject {
 
   void add(std::shared_ptr<TypeAlias> t) { type_aliases_.push_back(t); }
 
+  void add(std::shared_ptr<TemplateAlias> t) { template_aliases_.push_back(t); }
+
   void replace_template_variables(
       const std::vector<std::string> &template_names,
       const std::vector<std::string> &template_arguments) {
@@ -1165,6 +1231,9 @@ class Class : public LanguageObject {
     }
     for (auto &t : type_aliases_) {
       t->replace_template_variables(template_names, template_arguments);
+    }
+    for (auto &t : template_aliases_) {
+        t->replace_template_variables(template_names, template_arguments);
     }
   }
 
@@ -1220,6 +1289,7 @@ class Class : public LanguageObject {
   std::vector<std::shared_ptr<MemberFunction>> member_functions_;
   std::vector<std::shared_ptr<DataMember>> data_members_;
   std::vector<std::shared_ptr<TypeAlias>> type_aliases_;
+  std::vector<std::shared_ptr<TemplateAlias>> template_aliases_;
 };
 
 using ClassTemplate = Template<Class>;
@@ -1292,6 +1362,10 @@ class Namespace : public LanguageObject {
       namespaces_.push_back(ns);
     }
   }
+  /// Add enum to namespace.
+  void add(std::shared_ptr<Enum> e) {
+      enums_.push_back(e);
+  }
 
   std::vector<std::shared_ptr<Namespace>> get_namespaces() const {
     return namespaces_;
@@ -1312,7 +1386,10 @@ class Namespace : public LanguageObject {
     return function_templates_;
   }
 
-  void join(const Namespace &other) {
+  void join(Namespace &other) {
+
+    scope_.join(other.scope_);
+
     auto other_classes = other.get_classes();
     detail::set_parents(other_classes, this);
     classes_.insert(classes_.end(), other_classes.begin(), other_classes.end());
@@ -1350,6 +1427,7 @@ class Namespace : public LanguageObject {
       exports.insert(
           exports.end(), nested_functions.begin(), nested_functions.end());
     }
+
     return exports;
   }
 
@@ -1421,6 +1499,7 @@ class Namespace : public LanguageObject {
   std::vector<std::shared_ptr<Function>> functions_;
   std::vector<std::shared_ptr<FunctionTemplate>> function_templates_;
   std::vector<std::shared_ptr<Namespace>> namespaces_;
+  std::vector<std::shared_ptr<Enum>> enums_;
 };
 
 std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {
@@ -1560,6 +1639,9 @@ struct Parser<Namespace> {
       case CXCursor_Namespace: {
         ns->add(parse<Namespace>(c, ns));
       } break;
+      case CXCursor_EnumDecl: {
+          ns->add(std::make_shared<Enum>(c, ns));
+      } break;
       default:
         break;
     }
@@ -1588,6 +1670,9 @@ struct Parser<Class> {
       case CXCursor_TypeAliasDecl: {
         cl->add(parse<TypeAlias>(c, cl));
       } break;
+    case CXCursor_TypeAliasTemplateDecl: {
+        cl->add(std::make_shared<TemplateAlias>(c, cl));
+    } break;
       default:
         break;
     }
