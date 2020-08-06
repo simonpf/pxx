@@ -1035,7 +1035,8 @@ void to_json(json &j, const Function &f) {
  */
 class MemberFunction : public Function {
  public:
-  MemberFunction(CXCursor c, LanguageObject *p) : Function(c, p) {}
+  MemberFunction(CXCursor c, LanguageObject *p)
+      : Function(c, p), is_const_(clang_CXXMethod_isConst(c)) {}
 
   /** Return spelling of corresponding function pointer type.
      *
@@ -1046,8 +1047,8 @@ class MemberFunction : public Function {
      */
   std::string get_pointer_type_spelling() const {
     std::stringstream ss;
-    ss << return_type_.get_qualified_name() << "("
-       << parent_->get_qualified_name() << "::*)(";
+    ss << return_type_.get_qualified_name() << "(";
+    ss << parent_->get_qualified_name() << "::*)(";
     for (size_t i = 0; i < arguments_.size(); ++i) {
       ss << arguments_[i]->get_type().get_qualified_name();
       if (i < arguments_.size() - 1) {
@@ -1055,6 +1056,9 @@ class MemberFunction : public Function {
       }
     }
     ss << ")";
+    if (is_const_) {
+        ss << "const ";
+    }
     return ss.str();
   }
 
@@ -1075,6 +1079,9 @@ class MemberFunction : public Function {
     f->return_type_ = *f->return_type_.clone(f.get());
     return f;
   }
+
+ private:
+  bool is_const_;
 };
 
 /** JSON serialization of MemberFunction

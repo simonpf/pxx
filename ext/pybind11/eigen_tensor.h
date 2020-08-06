@@ -250,7 +250,7 @@ std::array<Eigen::Index, rank> get_dimensions(array a) {
  *         given Eigen tensor.
  */
 template <typename props>
-handle tensor_array_cast(typename props::Type &src,
+handle tensor_array_cast(const typename props::Type &src,
                          handle base = handle(),
                          bool writable = props::writable) {
   typename props::NumpyArrayType a{src.dimensions(), src.data(), base};
