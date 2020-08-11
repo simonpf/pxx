@@ -49,12 +49,13 @@ std::string replace_names(std::string name,
   // Search for valid C++ identifiers in name and replace.
   std::string input = name;
   std::smatch match;
-  std::regex_search(name, match, re);
-  std::stringstream output{};
+  std::string result = name;
 
   bool any_match = true;
 
   while (any_match) {
+    std::stringstream output{};
+    std::regex_search(result, match, re);
     any_match = false;
 
     while (!match.empty()) {
@@ -68,12 +69,16 @@ std::string replace_names(std::string name,
       for (int i = 0; i < static_cast<int>(names.size()); ++i) {
         const std::string &n = names[i];
 
-        if (n == ms) {
-          // Replace match.
-          output << values[i];
-          matched = true;
-          any_match = true;
-          break;
+        if ((n == ms) && (ms != values[i])) {
+          std::string s = match.suffix();
+          if (!((s.size() > 0) && (s[0] = '<') &&
+                (n == values[i].substr(0, n.size())))) {
+            // Replace match.
+            output << values[i];
+            matched = true;
+            any_match = true;
+            break;
+          }
         }
       }
       // If didn't match, keep string.
@@ -83,9 +88,10 @@ std::string replace_names(std::string name,
       input = match.suffix();
       std::regex_search(input, match, re);
     }
+    output << input;
+    result = output.str();
   }
-  output << input;
-  return output.str();
+  return result;
 }
 
 enum class access_specifier_t { pub, prot, priv };
@@ -124,6 +130,23 @@ void set_parents(std::vector<std::shared_ptr<T>> &ts, S *ptr) {
   for (auto &t : ts) {
     t->set_parent(ptr);
   }
+}
+
+std::string remove_scope_prefix(std::string prefix, std::string name) {
+
+    if (prefix == "") {
+        return name;
+    }
+
+    std::string result = name;
+    size_t l = result.size();
+    size_t p = result.find(prefix);
+    while(p < l) {
+        result.replace(p, prefix.size(), "");
+        l = result.size();
+        p = result.find(prefix);
+    }
+    return result;
 }
 
 }  // namespace detail
@@ -167,6 +190,7 @@ class Scope {
     auto it = std::find(type_names_.begin(), type_names_.end(), name);
     if (it == type_names_.end()) {
       type_names_.push_back(name);
+
       type_replacements_.push_back(value);
     } else {
       size_t pos = it - type_names_.begin();
@@ -211,11 +235,12 @@ class Scope {
 
   std::string get_prefix() {
     std::string name = "";
-    if (parent_scope_ && (parent_scope_ != this)) {
+    if (parent_scope_) {
       name += parent_scope_->get_prefix();
+      name += name_;
     }
-    if (name_ != "") {
-      name += name_ + "::";
+    if (name != "") {
+      name += "::";
     }
     return name;
   }
@@ -260,10 +285,11 @@ class LanguageObject {
   LanguageObject(CXCursor cursor, LanguageObject *parent = nullptr)
       : name_(to_string(clang_getCursorSpelling(cursor))),
         parent_(parent),
-        scope_(parent ? name_ : "", parent ? parent->get_scope() : nullptr) {
+        parent_scope_(parent ? parent->get_scope() : nullptr) {
     if (parent) {
       settings_ = parent->get_export_settings();
     }
+
 
     export_name_ = name_;
 
@@ -273,6 +299,9 @@ class LanguageObject {
       settings_ = cp.settings;
     }
   }
+
+  virtual ~LanguageObject() = default;
+
   /** Clone language object
    *
    * Creates new LanguageObject object on the heap and returns it
@@ -294,7 +323,6 @@ class LanguageObject {
    * @param The new name of the object.
    */
   void set_name(std::string name) {
-    scope_.set_name(name);
     name_ = name;
   }
 
@@ -304,9 +332,9 @@ class LanguageObject {
   /** Set parent pointer of object.
    * @param lo Pointer to new parent.
    */
-  void set_parent(LanguageObject *lo) {
+  virtual void set_parent(LanguageObject *lo) {
     parent_ = lo;
-    scope_.set_parent(lo->get_scope());
+    parent_scope_ = lo->get_scope();
   }
   /** Qualified name of language object.
      *
@@ -316,11 +344,8 @@ class LanguageObject {
      */
   std::string get_qualified_name() const {
     std::string prefix = "";
-    if (parent_) {
-      Scope *ps = parent_->get_scope();
-      if (ps) {
-        prefix = ps->get_prefix();
-      }
+    if (parent_scope_) {
+      prefix = parent_scope_->get_prefix();
     }
     return prefix + name_;
   }
@@ -342,8 +367,8 @@ class LanguageObject {
    *
    * @return The object's scope.
    */
-  Scope *get_scope() { return &scope_; }
-  const Scope *get_scope() const { return &scope_; }
+  virtual Scope *get_scope() { return parent_scope_; }
+  virtual Scope *get_scope() const { return parent_scope_; }
 
   /// Get the object's export settings.
   /** Get the object's export settings.
@@ -360,7 +385,7 @@ class LanguageObject {
   std::string name_;
   std::string export_name_;
   LanguageObject *parent_;
-  Scope scope_;
+  Scope *parent_scope_;
   ExportSettings settings_;
 };
 
@@ -413,7 +438,9 @@ class Type {
      * @param p Scope  which the type should be interpreted.
      */
   Type(CXType t, Scope *p) : type_(t), scope_(p) {
+
     name_ = to_string(clang_getTypeSpelling(type_));
+    name_ = detail::remove_scope_prefix(scope_->get_prefix(), name_);
 
     is_pointer_ = (type_.kind == CXType_Pointer);
     is_lvalue_reference_ = (type_.kind == CXType_LValueReference);
@@ -456,6 +483,7 @@ class Type {
   std::string get_qualified_name() const {
     std::vector<std::string> names, values;
     std::tie(names, values) = scope_->get_type_replacements();
+
     std::string qualified_name =
         detail::replace_names(get_name(), names, values);
     return qualified_name;
@@ -1036,7 +1064,10 @@ void to_json(json &j, const Function &f) {
 class MemberFunction : public Function {
  public:
   MemberFunction(CXCursor c, LanguageObject *p)
-      : Function(c, p), is_const_(clang_CXXMethod_isConst(c)) {}
+      : Function(c, p), is_const_(clang_CXXMethod_isConst(c)) {
+
+
+    }
 
   /** Return spelling of corresponding function pointer type.
      *
@@ -1152,17 +1183,26 @@ class Class : public LanguageObject {
      */
   Class(CXCursor c, LanguageObject *p)
       : LanguageObject(c, p),
+        scope_(name_, p ? p->get_scope() : nullptr),
         usr_(to_string(clang_getCursorUSR(c))),
         type_(c, p->get_scope()) {
-    p->get_scope()->add_type_name(name_, get_qualified_name());
-    p->get_scope()->register_type(usr_, &type_);
+    parent_scope_->add_type_name(name_, get_qualified_name());
+    parent_scope_->register_type(usr_, &type_);
   }
 
   void set_name(std::string n) {
     std::string old_name = name_;
     LanguageObject::set_name(n);
+    scope_.set_name(n);
     parent_->get_scope()->add_type_name(old_name, get_qualified_name());
   }
+
+  void set_parent(LanguageObject *p) {
+    this->LanguageObject::set_parent(p);
+    scope_.set_parent(p->get_scope());
+  }
+
+  Scope *get_scope() { return &scope_; }
 
   /** Create clone of class object.
      *
@@ -1240,7 +1280,7 @@ class Class : public LanguageObject {
       t->replace_template_variables(template_names, template_arguments);
     }
     for (auto &t : template_aliases_) {
-        t->replace_template_variables(template_names, template_arguments);
+      t->replace_template_variables(template_names, template_arguments);
     }
   }
 
@@ -1290,6 +1330,7 @@ class Class : public LanguageObject {
   friend void to_json(json &j, const Class &c);
 
  private:
+  Scope scope_;
   std::string usr_;
   Type type_;
   std::vector<std::shared_ptr<Constructor>> constructors_;
@@ -1336,11 +1377,18 @@ std::ostream &operator<<(std::ostream &stream, const Class &cl) {
 class Namespace : public LanguageObject {
  public:
   Namespace(CXCursor cursor, LanguageObject *parent)
-      : LanguageObject(cursor, parent) {
+      : LanguageObject(cursor, parent),
+        scope_(name_, parent ? parent->get_scope() : nullptr) {
     if (parent) {
       parent->get_scope()->add_type_name(name_, get_qualified_name());
     }
   }
+  void set_parent(LanguageObject *p) {
+    this->LanguageObject::set_parent(p);
+    scope_.set_parent(p->get_scope());
+  }
+
+  Scope *get_scope() { return &scope_; }
 
   /// Add class to namespace.
   void add(std::shared_ptr<Class> cl) { classes_.push_back(cl); }
@@ -1370,9 +1418,7 @@ class Namespace : public LanguageObject {
     }
   }
   /// Add enum to namespace.
-  void add(std::shared_ptr<Enum> e) {
-      enums_.push_back(e);
-  }
+  void add(std::shared_ptr<Enum> e) { enums_.push_back(e); }
 
   std::vector<std::shared_ptr<Namespace>> get_namespaces() const {
     return namespaces_;
@@ -1394,7 +1440,6 @@ class Namespace : public LanguageObject {
   }
 
   void join(Namespace &other) {
-
     scope_.join(other.scope_);
 
     auto other_classes = other.get_classes();
@@ -1501,6 +1546,7 @@ class Namespace : public LanguageObject {
   friend std::ostream &operator<<(std::ostream &stream, const Namespace &t);
 
  protected:
+  Scope scope_;
   std::vector<std::shared_ptr<Class>> classes_;
   std::vector<std::shared_ptr<ClassTemplate>> class_templates_;
   std::vector<std::shared_ptr<Function>> functions_;

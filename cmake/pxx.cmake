@@ -19,17 +19,24 @@ macro(add_pxx_module)
   list(TRANSFORM include_args PREPEND -I)
 
   ##############################################################################
-  # Comman line arguments
+  # Command line arguments
   ##############################################################################
 
   find_package(Python COMPONENTS Interpreter Development)
+  add_library(${PXX_MODULE} SHARED ${output_file})
+
+  #
+  # Use right CXX standard
+  #
+
+  get_target_property(CS ${PXX_MODULE} CXX_STANDARD)
+  set(STANDARDFLAG "-std=c++${CS}")
 
   add_custom_command(
     OUTPUT ${output_file}
-    COMMAND ${Python_EXECUTABLE} -m pxx ${input_file} --output_file ${output_file} ${include_args}
+    COMMAND ${Python_EXECUTABLE} -m pxx ${input_file} --output_file ${output_file} ${STANDARDFLAG} ${include_args}
     DEPENDS ${input_file})
 
-  add_library(${PXX_MODULE} SHARED ${output_file})
 
   execute_process(
     COMMAND ${Python_EXECUTABLE} -c "import pxx, os; print(os.path.dirname(pxx.__file__))"

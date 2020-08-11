@@ -15,18 +15,22 @@ macro(add_pxx_module)
   list(TRANSFORM PXX_INCLUDE_DIRS PREPEND "-I" OUTPUT_VARIABLE PXX_INCLUDE_DIRS_ARG)
 
   ##############################################################################
-  # Comman line arguments
+  # Command line arguments
   ##############################################################################
 
   find_package(Python COMPONENTS Interpreter Development)
 
+  add_library(${PXX_MODULE} SHARED ${output_file})
+
+  get_target_property(CS ${PXX_MODULE} CXX_STANDARD)
+  set(STANDARDFLAG "-std=c++${CS}")
+
   add_custom_command(
     OUTPUT ${output_file}
-    COMMAND ${Python_EXECUTABLE} -m pxx ${input_file} --output_file ${output_file} ${PXX_INCLUDE_DIRS_ARG}
+    COMMAND ${Python_EXECUTABLE} -m pxx ${input_file} --output_file ${output_file} ${STANDARDFLAG} ${PXX_INCLUDE_DIRS_ARG}
     DEPENDS ${PXX_DEPENDS} ${input_file}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/python)
 
-  add_library(${PXX_MODULE} SHARED ${output_file})
 
   execute_process(
     COMMAND ${Python_EXECUTABLE} -c "import pxx, os; print(os.path.dirname(pxx.__file__))"
