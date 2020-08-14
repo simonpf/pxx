@@ -36,7 +36,7 @@ struct ExportSettings {
   bool hide = false;
   std::vector<InstanceString> instance_strings = {};
 
-    /** Parse single pxx comment line.
+  /** Parse single pxx comment line.
      *
      * Aggregates the instruction from a pxx comment into
      * the ExportSettings object.
@@ -84,8 +84,7 @@ std::ostream& operator<<(std::ostream& stream, ExportSettings settings) {
  * settings.
  */
 struct CommentParser {
-
-    /** Parse pxx comment
+  /** Parse pxx comment
      *
      * @param coment String containing all comments for a given language object.
      */
@@ -162,7 +161,7 @@ void initialize_parser() {
 
   CommentParser::parser["export"] = [](const peg::SemanticValues& /*sv*/) {
     return PxxComment{true, false, {}};
-};
+  };
 
   CommentParser::parser["hide"] = [](const peg::SemanticValues& /*sv*/) {
     return PxxComment{false, true, {}};

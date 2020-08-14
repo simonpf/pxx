@@ -133,20 +133,19 @@ void set_parents(std::vector<std::shared_ptr<T>> &ts, S *ptr) {
 }
 
 std::string remove_scope_prefix(std::string prefix, std::string name) {
+  if (prefix == "") {
+    return name;
+  }
 
-    if (prefix == "") {
-        return name;
-    }
-
-    std::string result = name;
-    size_t l = result.size();
-    size_t p = result.find(prefix);
-    while(p < l) {
-        result.replace(p, prefix.size(), "");
-        l = result.size();
-        p = result.find(prefix);
-    }
-    return result;
+  std::string result = name;
+  size_t l = result.size();
+  size_t p = result.find(prefix);
+  while (p < l) {
+    result.replace(p, prefix.size(), "");
+    l = result.size();
+    p = result.find(prefix);
+  }
+  return result;
 }
 
 }  // namespace detail
@@ -246,10 +245,13 @@ class Scope {
   }
 
   void join(Scope &other) {
-      names_.insert(names_.end(), other.names_.begin(), other.names_.end());
-      type_names_.insert(type_names_.end(), other.type_names_.begin(), other.type_names_.end());
-      type_replacements_.insert(type_replacements_.end(), other.type_replacements_.begin(), other.type_replacements_.end());
-      user_defined_types_.merge(other.user_defined_types_);
+    names_.insert(names_.end(), other.names_.begin(), other.names_.end());
+    type_names_.insert(
+        type_names_.end(), other.type_names_.begin(), other.type_names_.end());
+    type_replacements_.insert(type_replacements_.end(),
+                              other.type_replacements_.begin(),
+                              other.type_replacements_.end());
+    user_defined_types_.merge(other.user_defined_types_);
   }
 
  protected:
@@ -290,16 +292,11 @@ class LanguageObject {
       settings_ = parent->get_export_settings();
     }
 
-
     export_name_ = name_;
 
     if (clang_isDeclaration(clang_getCursorKind(cursor))) {
       auto s = to_string(clang_Cursor_getRawCommentText(cursor));
       CommentParser cp(s, settings_);
-      std::cout << "PARSED EXPORT SETTINGS: " << name_ << std::endl;
-      settings_ = cp.settings;
-      std::cout << settings_ << std::endl;
-      std::cout << std::endl;
     }
   }
 
@@ -325,9 +322,7 @@ class LanguageObject {
   /** Set spelling of language object.
    * @param The new name of the object.
    */
-  void set_name(std::string name) {
-    name_ = name;
-  }
+  void set_name(std::string name) { name_ = name; }
 
   /// Get parent pointer.
   LanguageObject *get_parent() { return parent_; }
@@ -441,7 +436,6 @@ class Type {
      * @param p Scope  which the type should be interpreted.
      */
   Type(CXType t, Scope *p) : type_(t), scope_(p) {
-
     name_ = to_string(clang_getTypeSpelling(type_));
     name_ = detail::remove_scope_prefix(scope_->get_prefix(), name_);
 
@@ -727,8 +721,7 @@ class Template {
      *
      * @t The definition of the template.
      */
-  Template(std::shared_ptr<Base> t) : template_(t) {
-    }
+  Template(std::shared_ptr<Base> t) : template_(t) {}
 
   virtual ~Template() = default;
 
@@ -839,11 +832,11 @@ class TemplateSpecialization : public Template<Base> {
 
     std::vector<std::string> names, values;
     std::tie(names, values) = template_->get_scope()->get_type_replacements();
-    size_t p = std::find(names.begin(), names.end(), template_->get_name()) - names.begin();
+    size_t p = std::find(names.begin(), names.end(), template_->get_name()) -
+               names.begin();
     names.erase(names.begin() + p, names.begin() + p + 1);
     values.erase(values.begin() + p, values.begin() + p + 1);
     template_name = detail::replace_names(template_name, names, values);
-
 
     return template_name;
   }
@@ -911,8 +904,7 @@ class TypeAlias : public LanguageObject {
  */
 class TemplateAlias : public LanguageObject {
  public:
-  TemplateAlias(CXCursor c, LanguageObject *p)
-      : LanguageObject(c, p) {
+  TemplateAlias(CXCursor c, LanguageObject *p) : LanguageObject(c, p) {
     p->get_scope()->add_type_name(name_, get_qualified_name());
   }
 
@@ -923,9 +915,9 @@ class TemplateAlias : public LanguageObject {
 
   void replace_template_variables(const std::vector<std::string> &names,
                                   const std::vector<std::string> &values) {
-    std::string qualified_name = detail::replace_names(get_qualified_name(), names, values);
-    parent_->get_scope()->add_type_name(name_,
-                                        qualified_name);
+    std::string qualified_name =
+        detail::replace_names(get_qualified_name(), names, values);
+    parent_->get_scope()->add_type_name(name_, qualified_name);
   }
 };
 
@@ -940,11 +932,9 @@ class TemplateAlias : public LanguageObject {
  */
 class Enum : public LanguageObject {
  public:
-  Enum(CXCursor c, LanguageObject *p)
-      : LanguageObject(c, p) {
-        p->get_scope()->add_type_name(get_name(), get_qualified_name());
+  Enum(CXCursor c, LanguageObject *p) : LanguageObject(c, p) {
+    p->get_scope()->add_type_name(get_name(), get_qualified_name());
   }
-
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1067,10 +1057,7 @@ void to_json(json &j, const Function &f) {
 class MemberFunction : public Function {
  public:
   MemberFunction(CXCursor c, LanguageObject *p)
-      : Function(c, p), is_const_(clang_CXXMethod_isConst(c)) {
-
-
-    }
+      : Function(c, p), is_const_(clang_CXXMethod_isConst(c)) {}
 
   /** Return spelling of corresponding function pointer type.
      *
@@ -1091,7 +1078,7 @@ class MemberFunction : public Function {
     }
     ss << ")";
     if (is_const_) {
-        ss << "const ";
+      ss << "const ";
     }
     return ss.str();
   }
@@ -1696,7 +1683,7 @@ struct Parser<Namespace> {
         ns->add(parse<Namespace>(c, ns));
       } break;
       case CXCursor_EnumDecl: {
-          ns->add(std::make_shared<Enum>(c, ns));
+        ns->add(std::make_shared<Enum>(c, ns));
       } break;
       default:
         break;
@@ -1726,9 +1713,9 @@ struct Parser<Class> {
       case CXCursor_TypeAliasDecl: {
         cl->add(parse<TypeAlias>(c, cl));
       } break;
-    case CXCursor_TypeAliasTemplateDecl: {
+      case CXCursor_TypeAliasTemplateDecl: {
         cl->add(std::make_shared<TemplateAlias>(c, cl));
-    } break;
+      } break;
       default:
         break;
     }
