@@ -3,6 +3,7 @@
 
 #include <peglib/peglib.h>
 
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -17,16 +18,41 @@ using InstanceString = std::pair<std::string, std::vector<std::string>>;
 // Export settings
 ////////////////////////////////////////////////////////////////////////////////
 
+/// Parsed settings from a pxx comment line.
+struct PxxComment {
+  bool exp = false;
+  bool hide = false;
+  std::optional<InstanceString> instance_string = {};
+};
+
+/** The export settings of parsed language object.
+ *
+ * The ExportSettings struct sores information relevant to the exporting
+ * of different language objects to Python.
+ *
+ */
 struct ExportSettings {
   bool exp = false;
+  bool hide = false;
   std::vector<InstanceString> instance_strings = {};
 
-  ExportSettings& operator+=(const ExportSettings& other) {
-    exp |= other.exp;
-    instance_strings.insert(instance_strings.end(),
-                            other.instance_strings.begin(),
-                            other.instance_strings.end());
-    return *this;
+    /** Parse single pxx comment line.
+     *
+     * Aggregates the instruction from a pxx comment into
+     * the ExportSettings object.
+     *
+     * @param comment The PxxComment line to incorporate.
+     */
+  void parse(const PxxComment& comment) {
+    if (comment.exp) {
+      exp = true;
+    }
+    if (comment.hide) {
+      exp = false;
+    }
+    if (comment.instance_string) {
+      instance_strings.push_back(*comment.instance_string);
+    }
   }
 };
 
@@ -51,7 +77,18 @@ std::ostream& operator<<(std::ostream& stream, ExportSettings settings) {
 // Comment parser
 ////////////////////////////////////////////////////////////////////////////////
 
+/** Parse for pxx comments.
+ *
+ * The CommentParse takes the given default export settings and adds the
+ * information found in the comments of the language object to these
+ * settings.
+ */
 struct CommentParser {
+
+    /** Parse pxx comment
+     *
+     * @param coment String containing all comments for a given language object.
+     */
   CommentParser(std::string comment,
                 ExportSettings default_settings = ExportSettings())
       : settings(default_settings) {
@@ -84,10 +121,10 @@ struct CommentParser {
       }
 
       parser.enable_packrat_parsing();
-      std::vector<ExportSettings> ret;
+      std::vector<PxxComment> ret;
       parser.parse(l.c_str(), ret);
-      for (auto& s : ret) {
-        settings += s;
+      for (auto& line : ret) {
+        settings.parse(line);
       }
     }
   }
@@ -105,8 +142,9 @@ struct CommentParser {
 bool CommentParser::initialized = false;
 peg::parser CommentParser::parser = peg::parser(R"(
     pxx <- '//' 'pxx' '::' expression (',' expression)*
-    expression <- export / instance
+    expression <- export / hide / instance
     export <- 'export' ('(' ')')?
+    hide <- 'hide' ('(' ')')?
     string <- '\"'[a-zA-Z0-9_,;<>?: ]*'\"'
     string_list <- '[' string (',' string)* ']'
     instance <- 'instance('(string ',')? string_list ')'
@@ -115,7 +153,7 @@ peg::parser CommentParser::parser = peg::parser(R"(
 
 void initialize_parser() {
   CommentParser::parser["pxx"] = [](const peg::SemanticValues& sv) {
-    return sv.transform<ExportSettings>();
+    return sv.transform<PxxComment>();
   };
 
   CommentParser::parser["expression"] = [](const peg::SemanticValues& sv) {
@@ -123,7 +161,11 @@ void initialize_parser() {
   };
 
   CommentParser::parser["export"] = [](const peg::SemanticValues& /*sv*/) {
-    return ExportSettings{true};
+    return PxxComment{true, false, {}};
+};
+
+  CommentParser::parser["hide"] = [](const peg::SemanticValues& /*sv*/) {
+    return PxxComment{false, true, {}};
   };
 
   CommentParser::parser["instance"] = [](const peg::SemanticValues& sv) {
@@ -133,7 +175,7 @@ void initialize_parser() {
     }
     auto instance_strings = std::make_pair(
         name, peg::any_cast<std::vector<std::string>>(sv[sv.size() - 1]));
-    return ExportSettings{false, {instance_strings}};
+    return PxxComment{false, false, instance_strings};
   };
 
   CommentParser::parser["string_list"] = [](const peg::SemanticValues& sv) {

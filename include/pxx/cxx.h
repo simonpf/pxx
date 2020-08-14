@@ -296,7 +296,10 @@ class LanguageObject {
     if (clang_isDeclaration(clang_getCursorKind(cursor))) {
       auto s = to_string(clang_Cursor_getRawCommentText(cursor));
       CommentParser cp(s, settings_);
+      std::cout << "PARSED EXPORT SETTINGS: " << name_ << std::endl;
       settings_ = cp.settings;
+      std::cout << settings_ << std::endl;
+      std::cout << std::endl;
     }
   }
 
