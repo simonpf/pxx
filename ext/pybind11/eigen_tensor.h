@@ -139,6 +139,11 @@ struct get_options<Eigen::TensorRef<Tensor>> {
     static constexpr int value = Tensor::Options;
 };
 
+template<typename Tensor>
+struct get_options<Eigen::TensorMap<Tensor>> {
+    static constexpr int value = Tensor::Options;
+};
+
 /** Properties of Eigen Tensor types.
  *
  * Helper struct to extract and combine information for Eigen tensor types.
@@ -153,7 +158,7 @@ template <typename Type_> struct EigenTensorProps {
     /** Corresponding type that manages its own data. */
     using PlainObjectType = Eigen::Tensor<Scalar, Type::NumIndices, get_options<Type>::value, typename Type::Index>;
     /** Corresponding map type. */
-    using EigenMapType = Eigen::TensorMap<PlainObjectType, get_options<Type>::value>;
+    using EigenMapType = Eigen::TensorMap<PlainObjectType>;
 
     /** The rank of the tensor */
     static constexpr Eigen::Index rank = Type::NumIndices;

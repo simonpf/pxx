@@ -31,6 +31,18 @@ namespace detail {
 
 using pxx::to_string;
 
+std::string remove_template_arguments(std::string s) {
+    size_t size = s.size();
+    size_t last_colon = 0;
+    size_t colon = s.find("::");
+    while (colon < size) {
+        last_colon = colon + 2;
+        colon = s.find("::", last_colon);
+    }
+    size_t pos = s.find("<", last_colon);
+    return std::string(s, 0, pos);
+}
+
 /** Replace names.
  *
  * Textual replacement of names.
@@ -71,10 +83,13 @@ std::string replace_names(std::string name,
 
         if ((n == ms) && (ms != values[i])) {
           std::string s = match.suffix();
-          if (!((s.size() > 0) && (s[0] = '<') &&
-                (n == values[i].substr(0, n.size())))) {
+          std::string repl = values[i];
+          if (n != repl.substr(0, n.size())) {
+              if ((s.size() > 0) && (s[0] == '<')) {
+                  repl = remove_template_arguments(repl);
+              }
             // Replace match.
-            output << values[i];
+            output << repl;
             matched = true;
             any_match = true;
             break;
@@ -297,6 +312,7 @@ class LanguageObject {
     if (clang_isDeclaration(clang_getCursorKind(cursor))) {
       auto s = to_string(clang_Cursor_getRawCommentText(cursor));
       CommentParser cp(s, settings_);
+      settings_ = cp.settings;
     }
   }
 
@@ -1277,8 +1293,8 @@ class Class : public LanguageObject {
   /** Get exported class methods.
    * @return Vector containing the class methods exported by this class.
    */
-  std::vector<std::shared_ptr<Function>> get_exported_methods() const {
-    std::vector<std::shared_ptr<Function>> exports;
+  std::vector<std::shared_ptr<MemberFunction>> get_exported_methods() const {
+    std::vector<std::shared_ptr<MemberFunction>> exports;
     std::copy_if(member_functions_.begin(),
                  member_functions_.end(),
                  std::back_inserter(exports),
@@ -1291,8 +1307,8 @@ class Class : public LanguageObject {
   /** Get exported constructors
    * @return Vector containing the constructors exported by this class.
    */
-  std::vector<std::shared_ptr<Function>> get_exported_constructors() const {
-    std::vector<std::shared_ptr<Function>> exports;
+  std::vector<std::shared_ptr<Constructor>> get_exported_constructors() const {
+    std::vector<std::shared_ptr<Constructor>> exports;
     std::copy_if(constructors_.begin(),
                  constructors_.end(),
                  std::back_inserter(exports),
@@ -1335,9 +1351,9 @@ using ClassTemplateSpecialization = TemplateSpecialization<Class>;
 
 void to_json(json &j, const Class &c) {
   to_json(j, static_cast<LanguageObject>(c));
-  j["constructors"] = c.constructors_;
-  j["methods"] = c.member_functions_;
-  j["data_members"] = c.data_members_;
+  j["constructors"] = c.get_exported_constructors();
+  j["methods"] = c.get_exported_methods();
+  j["data_members"] = c.get_exported_data_members();
 }
 
 std::ostream &operator<<(std::ostream &stream, const Class &cl) {
