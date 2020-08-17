@@ -1720,6 +1720,7 @@ struct Parser<Class> {
       case CXCursor_Constructor: {
         cl->add(parse<Constructor>(c, cl));
       } break;
+    case CXCursor_FunctionTemplate:
       case CXCursor_CXXMethod: {
         cl->add(parse<MemberFunction>(c, cl));
       } break;
