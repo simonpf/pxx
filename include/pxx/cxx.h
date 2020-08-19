@@ -1690,10 +1690,12 @@ struct Parser<Namespace> {
         ns->add(t);
       } break;
       case CXCursor_ClassTemplate: {
-        auto f = parse<Class>(c, ns);
-        auto t = std::make_shared<ClassTemplate>(f);
-        clang_visitChildren(c, Parser<ClassTemplate>::parse_impl, t.get());
-        ns->add(t);
+        if (clang_isCursorDefinition(c)) {
+          auto f = parse<Class>(c, ns);
+          auto t = std::make_shared<ClassTemplate>(f);
+          clang_visitChildren(c, Parser<ClassTemplate>::parse_impl, t.get());
+          ns->add(t);
+        }
       } break;
       case CXCursor_Namespace: {
         ns->add(parse<Namespace>(c, ns));
