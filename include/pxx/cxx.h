@@ -1073,7 +1073,11 @@ void to_json(json &j, const Function &f) {
 class MemberFunction : public Function {
  public:
   MemberFunction(CXCursor c, LanguageObject *p)
-      : Function(c, p), is_const_(clang_CXXMethod_isConst(c)) {}
+      : Function(c, p),
+        is_const_(clang_CXXMethod_isConst(c)),
+        is_static_(clang_CXXMethod_isStatic(c))
+
+        {}
 
   /** Return spelling of corresponding function pointer type.
      *
@@ -1085,7 +1089,11 @@ class MemberFunction : public Function {
   std::string get_pointer_type_spelling() const {
     std::stringstream ss;
     ss << return_type_.get_qualified_name() << "(";
-    ss << parent_->get_qualified_name() << "::*)(";
+    // Class qualifier only need for non-static functions.
+    if (!is_static_) {
+      ss << parent_->get_qualified_name() << "::";
+    }
+    ss << "*)(";
     for (size_t i = 0; i < arguments_.size(); ++i) {
       ss << arguments_[i]->get_type().get_qualified_name();
       if (i < arguments_.size() - 1) {
@@ -1119,6 +1127,7 @@ class MemberFunction : public Function {
 
  private:
   bool is_const_;
+  bool is_static_;
 };
 
 /** JSON serialization of MemberFunction
