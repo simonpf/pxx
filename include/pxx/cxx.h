@@ -1071,6 +1071,7 @@ void to_json(json &j, const Function &f) {
  * and class member functions.
  */
 class MemberFunction : public Function {
+    static const std::map<std::string, std::string> special_functions_;
  public:
   MemberFunction(CXCursor c, LanguageObject *p)
       : Function(c, p),
@@ -1125,6 +1126,14 @@ class MemberFunction : public Function {
     return f;
   }
 
+  std::string get_python_name() const {
+    auto search = special_functions_.find(name_);
+    if (search != special_functions_.end()) {
+      return search->second;
+    }
+    return name_;
+  }
+
  private:
   bool is_const_;
   bool is_static_;
@@ -1137,6 +1146,7 @@ class MemberFunction : public Function {
  */
 void to_json(json &j, const MemberFunction &f) {
   to_json(j, static_cast<Function>(f));
+  j["name"] = f.get_python_name();
   j["pointer_type"] = f.get_pointer_type_spelling();
 }
 
@@ -1826,6 +1836,15 @@ struct Parser<Constructor> {
 };
 
 }  // namespace detail
+
+const std::map<std::string, std::string> MemberFunction::special_functions_ =
+    {std::make_pair("operator+", "__add__"),
+     std::make_pair("operator+=", "__iadd__"),
+     std::make_pair("operator*", "__mul__"),
+     std::make_pair("operator*=", "__imul__"),
+     std::make_pair("operator/", "__div__"),
+     std::make_pair("operator/=", "__idiv__")};
+
 }  // namespace cxx
 }  // namespace pxx
 
