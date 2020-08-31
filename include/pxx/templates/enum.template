@@ -1,0 +1,5 @@
+  py::enum_<{{ enum.qualified_name }}>(m, "{{ enum.name }}")
+  {% for c in enum.constants %}
+  .value("{{ c.name }}", {{ c.qualified_name }})
+  {% endfor %}
+  .export_values();

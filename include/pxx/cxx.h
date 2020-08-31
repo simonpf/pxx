@@ -382,7 +382,7 @@ class LanguageObject {
    * @return The object's scope.
    */
   virtual Scope *get_scope() { return parent_scope_; }
-  virtual Scope *get_scope() const { return parent_scope_; }
+  virtual const Scope *get_scope() const { return parent_scope_; }
 
   /// Get the object's export settings.
   /** Get the object's export settings.
@@ -948,10 +948,40 @@ class TemplateAlias : public LanguageObject {
  */
 class Enum : public LanguageObject {
  public:
-  Enum(CXCursor c, LanguageObject *p) : LanguageObject(c, p) {
+  Enum(CXCursor c, LanguageObject *p)
+      : LanguageObject(c, p), scope_(name_, p ? p->get_scope() : nullptr) {
     p->get_scope()->add_type_name(get_name(), get_qualified_name());
   }
+
+  void add(std::shared_ptr<LanguageObject> c) { constants_.push_back(c); }
+
+  void set_parent(LanguageObject *p) {
+    scope_.set_parent(p->get_scope());
+    this->LanguageObject::set_parent(p);
+    for (auto &c : constants_) {
+      c->set_parent(this);
+    }
+  }
+
+  virtual Scope *get_scope() {
+    if (scope_.get_name() != "") {
+      return &scope_;
+    } else {
+      return parent_scope_;
+    }
+  }
+
+  friend void to_json(json &j, const Enum &e);
+
+ private:
+  Scope scope_;
+  std::vector<std::shared_ptr<LanguageObject>> constants_ = {};
 };
+
+void to_json(json &j, const Enum &e) {
+  to_json(j, reinterpret_cast<const LanguageObject &>(e));
+  j["constants"] = e.constants_;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Functions
@@ -1464,6 +1494,10 @@ class Namespace : public LanguageObject {
     return function_templates_;
   }
 
+  std::vector<std::shared_ptr<Enum>> get_enums() const {
+      return enums_;
+  }
+
   void join(Namespace &other) {
     scope_.join(other.scope_);
 
@@ -1489,6 +1523,11 @@ class Namespace : public LanguageObject {
     detail::set_parents(other_namespaces, this);
     namespaces_.insert(
         namespaces_.end(), other_namespaces.begin(), other_namespaces.end());
+
+    auto other_enums = other.get_enums();
+    detail::set_parents(other_enums, this);
+    enums_.insert(
+        enums_.end(), other_enums.begin(), other_enums.end());
   }
 
   std::vector<std::shared_ptr<Function>> get_exported_functions() const {
@@ -1539,7 +1578,7 @@ class Namespace : public LanguageObject {
   }
 
   std::vector<std::shared_ptr<Class>> get_class_template_instances() const {
-    std::vector<std::shared_ptr<Class>> exports;
+    std::vector<std::shared_ptr<Class>> exports{};
     for (auto &&ft : class_templates_) {
       auto instances = ft->get_instances();
       exports.insert(exports.end(), instances.begin(), instances.end());
@@ -1548,6 +1587,20 @@ class Namespace : public LanguageObject {
       auto nested_instances = n->get_class_template_instances();
       exports.insert(
           exports.end(), nested_instances.begin(), nested_instances.end());
+    }
+    return exports;
+  }
+
+  std::vector<std::shared_ptr<Enum>> get_exported_enums() const {
+  std::vector<std::shared_ptr<Enum>> exports{};
+    std::copy_if(
+        enums_.begin(),
+        enums_.end(),
+        std::back_inserter(exports),
+        [](std::shared_ptr<Enum> e) { return e->get_export_settings().exp; });
+    for (auto &&n : namespaces_) {
+      auto nested_enums = n->get_exported_enums();
+      exports.insert(exports.end(), nested_enums.begin(), nested_enums.end());
     }
     return exports;
   }
@@ -1606,6 +1659,7 @@ void to_json(json &j, const Namespace &t) {
   j["functions"] = t.get_exported_functions();
   j["function_template_instances"] = t.get_function_template_instances();
   j["class_template_instances"] = t.get_class_template_instances();
+  j["enums"] = t.get_exported_enums();
 }
 ////////////////////////////////////////////////////////////////////////////////
 // Parsing functions.
@@ -1720,7 +1774,7 @@ struct Parser<Namespace> {
         ns->add(parse<Namespace>(c, ns));
       } break;
       case CXCursor_EnumDecl: {
-        ns->add(std::make_shared<Enum>(c, ns));
+        ns->add(parse<Enum>(c, ns));
       } break;
       default:
         break;
@@ -1832,6 +1886,23 @@ struct Parser<Constructor> {
                                        CXCursor p,
                                        CXClientData client_data) {
     return Parser<Function>::parse_impl(c, p, client_data);
+  }
+};
+
+template <>
+struct Parser<Enum> {
+  /// parser specialization for enums.
+  static CXChildVisitResult parse_impl(CXCursor c,
+                                       CXCursor /*parent*/,
+                                       CXClientData client_data) {
+    Enum *e = reinterpret_cast<Enum *>(client_data);
+    CXCursorKind k = clang_getCursorKind(c);
+    switch (k) {
+      case CXCursor_EnumConstantDecl: {
+        e->add(parse<LanguageObject>(c, e));
+      } break;
+    }
+    return CXChildVisit_Continue;
   }
 };
 

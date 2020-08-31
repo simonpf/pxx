@@ -14,6 +14,11 @@
 namespace py = pybind11;
 
 PYBIND11_MODULE({{ module_name }}, m) {
+
+{% for enum in enums %}
+{% include "enum.template" %}
+{% endfor %}
+
 {% for class in classes %}
 {% include "class.template" %}
 {% endfor %}
