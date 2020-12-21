@@ -55,14 +55,17 @@ list(APPEND pxx_source_files ${pxx_headers})
 list(APPEND pxx_source_files ${pxx_templates})
 set(pxx_source_files ${pxx_source_files} CACHE INTERNAL "The PXX source files" FORCE)
 
+# External libraries
+add_subdirectory(ext)
+
 # Python module binary
 add_subdirectory(src)
 
 # Python module
 add_subdirectory(python)
 
-# tests
+# Tests
 add_subdirectory(test)
 
-
+# CMake files
 add_subdirectory(cmake)

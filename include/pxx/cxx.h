@@ -9,8 +9,11 @@
 #ifndef __PXX_CXX_H__
 #define __PXX_CXX_H__
 
+#include <pxx/cxx/string_manipulation.h>
+#include <pxx/cxx/scope.h>
 #include <pxx/comment_parser.h>
 #include <pxx/utils.h>
+
 
 #include <inja/inja.hpp>
 #include <iostream>
@@ -30,84 +33,6 @@ using json = nlohmann::json;
 namespace detail {
 
 using pxx::to_string;
-
-std::string remove_template_arguments(std::string s) {
-    size_t size = s.size();
-    size_t last_colon = 0;
-    size_t colon = s.find("::");
-    while (colon < size) {
-        last_colon = colon + 2;
-        colon = s.find("::", last_colon);
-    }
-    size_t pos = s.find("<", last_colon);
-    return std::string(s, 0, pos);
-}
-
-/** Replace names.
- *
- * Textual replacement of names.
- *
- * @param tname The type name containing template variables.
- * @param template_names The names of the template variables.
- * @param template_arguments The replacements for each variable.
- * @return The given typename with all template variables replaced
- *   with the corresponding types or variables.
- */
-std::string replace_names(std::string name,
-                          const std::vector<std::string> &names,
-                          const std::vector<std::string> &values) {
-  std::regex re("(^|[^:a-zA-Z_])([a-zA-Z_][a-zA-Z0-9_]*)");
-
-  // Search for valid C++ identifiers in name and replace.
-  std::string input = name;
-  std::smatch match;
-  std::string result = name;
-
-  bool any_match = true;
-
-  while (any_match) {
-    std::stringstream output{};
-    std::regex_search(result, match, re);
-    any_match = false;
-
-    while (!match.empty()) {
-      std::string ms = match[2];
-
-      // Copy what didn't match.
-      output << match.prefix();
-      output << match[1];
-
-      bool matched = false;
-      for (int i = 0; i < static_cast<int>(names.size()); ++i) {
-        const std::string &n = names[i];
-
-        if ((n == ms) && (ms != values[i])) {
-          std::string s = match.suffix();
-          std::string repl = values[i];
-          if (n != repl.substr(0, n.size())) {
-              if ((s.size() > 0) && (s[0] == '<')) {
-                  repl = remove_template_arguments(repl);
-              }
-            // Replace match.
-            output << repl;
-            matched = true;
-            any_match = true;
-            break;
-          }
-        }
-      }
-      // If didn't match, keep string.
-      if (!matched) {
-        output << ms;
-      }
-      input = match.suffix();
-      std::regex_search(input, match, re);
-    }
-    output << input;
-    result = output.str();
-  }
-  return result;
-}
 
 enum class access_specifier_t { pub, prot, priv };
 std::string to_string(access_specifier_t as) {
@@ -171,112 +96,7 @@ void to_json(json &j, std::shared_ptr<T> pt) {
     to_json(j, *pt);
   }
 }
-
 class Type;
-
-/**
- * A scope holds names that need to be resolved in order to identify
- * an object in another scope.
- */
-class Scope {
- public:
-  Scope(std::string name, Scope *parent_scope)
-      : name_(name), parent_scope_(parent_scope) {}
-  std::string get_name() { return name_; }
-  void set_name(std::string s) { name_ = s; }
-  void add_name(std::string name) { names_.push_back(name); }
-
-  size_t lookup_name(std::string name) {
-    size_t count = 0;
-    auto end = names_.end();
-    auto it = std::find(names_.begin(), end, name);
-    while (it < end) {
-      ++count;
-      ++it;
-      it = std::find(it, end, name);
-    }
-    return count;
-  }
-
-  void set_parent(Scope *p) { parent_scope_ = p; }
-
-  void add_type_name(std::string name, std::string value) {
-    auto it = std::find(type_names_.begin(), type_names_.end(), name);
-    if (it == type_names_.end()) {
-      type_names_.push_back(name);
-
-      type_replacements_.push_back(value);
-    } else {
-      size_t pos = it - type_names_.begin();
-      type_names_[pos] = name;
-      type_replacements_[pos] = value;
-    }
-  }
-
-  void register_type(std::string usr, Type *type_ptr) {
-    user_defined_types_.insert(std::make_pair(usr, type_ptr));
-  }
-
-  Type *lookup_type(std::string usr) {
-    auto it = user_defined_types_.find(usr);
-    if (it != user_defined_types_.end()) {
-      return it->second;
-    } else {
-      if (parent_scope_) {
-        return parent_scope_->lookup_type(usr);
-      } else {
-        return nullptr;
-      }
-    }
-  }
-
-  void update_type(std::string usr, Type *type_ptr) {
-    user_defined_types_[usr] = type_ptr;
-  }
-
-  std::pair<std::vector<std::string>, std::vector<std::string>>
-  get_type_replacements() {
-    std::vector<std::string> names{}, replacements{};
-    if (parent_scope_) {
-      std::tie(names, replacements) = parent_scope_->get_type_replacements();
-    }
-    names.insert(names.end(), type_names_.begin(), type_names_.end());
-    replacements.insert(replacements.end(),
-                        type_replacements_.begin(),
-                        type_replacements_.end());
-    return std::make_pair(names, replacements);
-  }
-
-  std::string get_prefix() {
-    std::string name = "";
-    if (parent_scope_) {
-      name += parent_scope_->get_prefix();
-      name += name_;
-    }
-    if (name != "") {
-      name += "::";
-    }
-    return name;
-  }
-
-  void join(Scope &other) {
-    names_.insert(names_.end(), other.names_.begin(), other.names_.end());
-    type_names_.insert(
-        type_names_.end(), other.type_names_.begin(), other.type_names_.end());
-    type_replacements_.insert(type_replacements_.end(),
-                              other.type_replacements_.begin(),
-                              other.type_replacements_.end());
-    user_defined_types_.merge(other.user_defined_types_);
-  }
-
- protected:
-  std::string name_;
-  Scope *parent_scope_;
-  std::vector<std::string> names_ = {};
-  std::vector<std::string> type_names_ = {};
-  std::vector<std::string> type_replacements_ = {};
-  std::map<std::string, Type *> user_defined_types_;
-};
 
 /** Any C++ language object.
  *
@@ -881,14 +701,14 @@ class TypeAlias : public LanguageObject {
         underlying_type_(clang_getTypedefDeclUnderlyingType(c),
                          p->get_scope()) {
     p->get_scope()->register_type(to_string(clang_getCursorUSR(c)), &type_);
-    p->get_scope()->add_type_name(type_.get_unqualified_name(),
-                                  underlying_type_.get_qualified_name());
+    p->get_scope()->add_type_alias(type_.get_unqualified_name(),
+                                   underlying_type_.get_qualified_name());
   }
 
   void update_reference(Type *type_ptr) {
     if ((type_ptr) && (underlying_type_ == *type_ptr)) {
       underlying_type_ = *type_ptr;
-      parent_->get_scope()->add_type_name(
+      parent_->get_scope()->add_type_alias(
           name_, underlying_type_.get_qualified_name());
     }
   }
@@ -904,7 +724,7 @@ class TypeAlias : public LanguageObject {
                                   const std::vector<std::string> &values) {
     std::string qualified_name = detail::replace_names(
         underlying_type_.get_qualified_name(), names, values);
-    parent_->get_scope()->add_type_name(type_.get_unqualified_name(),
+    parent_->get_scope()->add_type_alias(type_.get_unqualified_name(),
                                         qualified_name);
   }
 
@@ -921,7 +741,7 @@ class TypeAlias : public LanguageObject {
 class TemplateAlias : public LanguageObject {
  public:
   TemplateAlias(CXCursor c, LanguageObject *p) : LanguageObject(c, p) {
-    p->get_scope()->add_type_name(name_, get_qualified_name());
+    p->get_scope()->add_type_alias(name_, get_qualified_name());
   }
 
   std::shared_ptr<TemplateAlias> clone(LanguageObject *p) {
@@ -933,7 +753,7 @@ class TemplateAlias : public LanguageObject {
                                   const std::vector<std::string> &values) {
     std::string qualified_name =
         detail::replace_names(get_qualified_name(), names, values);
-    parent_->get_scope()->add_type_name(name_, qualified_name);
+    parent_->get_scope()->add_type_alias(name_, qualified_name);
   }
 };
 
@@ -950,7 +770,7 @@ class Enum : public LanguageObject {
  public:
   Enum(CXCursor c, LanguageObject *p)
       : LanguageObject(c, p), scope_(name_, p ? p->get_scope() : nullptr) {
-    p->get_scope()->add_type_name(get_name(), get_qualified_name());
+    p->get_scope()->add_type_alias(get_name(), get_qualified_name());
   }
 
   void add(std::shared_ptr<LanguageObject> c) { constants_.push_back(c); }
@@ -1068,7 +888,7 @@ class Function : public LanguageObject {
 
   /// True if there exists overloads with the scope in which the function is defined.
   bool has_overload() const {
-    return (parent_->get_scope()->lookup_name(name_) > 1);
+    return (parent_->get_scope()->get_n_definitions(name_) > 1);
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const Function &cl);
@@ -1241,7 +1061,7 @@ class Class : public LanguageObject {
         scope_(name_, p ? p->get_scope() : nullptr),
         usr_(to_string(clang_getCursorUSR(c))),
         type_(c, p->get_scope()) {
-    parent_scope_->add_type_name(name_, get_qualified_name());
+    parent_scope_->add_type_alias(name_, get_qualified_name());
     parent_scope_->register_type(usr_, &type_);
   }
 
@@ -1249,7 +1069,7 @@ class Class : public LanguageObject {
     std::string old_name = name_;
     LanguageObject::set_name(n);
     scope_.set_name(n);
-    parent_->get_scope()->add_type_name(old_name, get_qualified_name());
+    parent_->get_scope()->add_type_alias(old_name, get_qualified_name());
   }
 
   void set_parent(LanguageObject *p) {
@@ -1435,7 +1255,7 @@ class Namespace : public LanguageObject {
       : LanguageObject(cursor, parent),
         scope_(name_, parent ? parent->get_scope() : nullptr) {
     if (parent) {
-      parent->get_scope()->add_type_name(name_, get_qualified_name());
+      parent->get_scope()->add_type_alias(name_, get_qualified_name());
     }
   }
   void set_parent(LanguageObject *p) {

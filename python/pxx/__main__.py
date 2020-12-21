@@ -40,12 +40,16 @@ def main():
                         nargs=1,
                         metavar=("<output_file>",),
                         help="File to write the module code to.")
+    parser.add_argument("--export_all",
+                        help="Whether or not to export all found definitions.",
+                        action="store_true")
 
     args, other_args = parser.parse_known_args()
     input_file = args.input_file[0]
     classes = args.classes
     output_file = args.output_file
     module_name = args.module_name
+    export_all = args.export_all
 
     ###########################################################################
     # Check arguments
@@ -80,6 +84,8 @@ def main():
 
     print("other args: ", other_args)
     parser = Parser(input_file, [f"-I{include_path}"] + other_args)
+    if export_all:
+        parser.set_export_default()
     tu = parser.parse()
 
     # Only dumping AST.

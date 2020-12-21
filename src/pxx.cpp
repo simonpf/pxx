@@ -11,7 +11,9 @@ PYBIND11_MODULE(_pxx, m) {
     py::class_<pxx::Parser>(m, "Parser")
         .def(py::init<const std::string &, std::vector<std::string>>(),
              "filename"_a, py::arg("command_line_args") = std::vector<std::string>{})
-        .def("parse", &pxx::Parser::parse);
+        .def("parse", &pxx::Parser::parse)
+        .def("set_export_default", &pxx::Parser::set_export_default)
+        .def("set_hide_default", &pxx::Parser::set_hide_default);
     py::class_<pxx::ast::AST>(m, "TranslationUnit")
         .def("print", &pxx::ast::AST::print)
         .def("dump_ast", &pxx::ast::AST::dump_ast);

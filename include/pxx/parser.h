@@ -39,6 +39,14 @@ public:
     return tu;
   }
 
+  void set_export_default() {
+      settings_.exp = true;
+  }
+
+  void set_hide_default() {
+      settings_.exp = false;
+  }
+
   ~Parser() {
     clang_disposeTranslationUnit(unit_);
     clang_disposeIndex(index_);
