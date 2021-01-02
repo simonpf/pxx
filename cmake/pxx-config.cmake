@@ -19,7 +19,6 @@ macro(add_pxx_module)
   ##############################################################################
 
   find_package(Python COMPONENTS Interpreter Development)
-
   add_library(${PXX_MODULE} SHARED ${output_file})
 
   get_target_property(CS ${PXX_MODULE} CXX_STANDARD)
