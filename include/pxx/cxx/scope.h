@@ -9,34 +9,85 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "pxx/cxx/type_names.h"
 
 namespace pxx {
 namespace cxx {
 
+
 class Type;
 
-/** A scope that keeps track of declared names.
+/** Scopes of names.
  *
- * The Scope class keeps track of different types, functions and classes
- * defined in it.
+ * The Scope class keeps track of definitions of types and their names, so that
+ * names from a given scope can be mapped to the root scope.
+ *
+ * All scopes except for the root scope have a parent scope. Each scope keeps track
+ * of the names defined in it as well as child scopes.
+ *
  */
 class Scope {
  public:
-  /** Create a new scope.
+   /** Create a new scope.
+    *
+    * Creates a new scope with the given name and registers the scope as a child
+    * scope of the parent.
+    *
     * @param name The name of the scope.
     * @param parent_scope Pointer to parent scope or nullptr if root scope.
     */
-  Scope(std::string name, Scope *parent_scope)
-      : name_(name), parent_scope_(parent_scope) {
-    }
-  std::string get_name() { return name_; }
+   Scope(std::string name, Scope *parent_scope)
+       : name_(name), parent_scope_(parent_scope) {
+     if (parent_scope_) {
+       parent_scope_->add_child(name_, this);
+     }
+   }
 
-  /// Set the name of the scope.
-  void set_name(std::string s) { name_ = s; }
+   /// The name of the scope.
+   std::string get_name() { return name_; }
+
+   /// Set the name of the scope.
+   void set_name(std::string s) {
+     if (parent_scope_) {
+       parent_scope_->remove_child(name_);
+       parent_scope_->add_child(s, this);
+     }
+     name_ = s;
+  }
+
   /// Add a name to the scope.
   void add_name(std::string name) { names_.push_back(name); }
   /// Set the parent of the scope.
-  void set_parent(Scope *p) { parent_scope_ = p; }
+  void set_parent(Scope *p) {
+      if (parent_scope_) {
+          parent_scope_->remove_child(name_);
+      }
+      p->add_child(name_, this);
+      parent_scope_ = p;
+  }
+
+  /** Return pointer to child scope.
+   *
+   * @param name Name of the child scope.
+   * @return Pointer to child scope or nullptr if no scope with the given name
+   * is present.
+   */
+  Scope *get_child(const std::string &name) {
+      auto found = child_scopes_.find(name);
+      if (found == child_scopes_.end()) {
+          return nullptr;
+      }
+      return found->second;
+  }
+
+  /// Register child scope.
+  void add_child(std::string name, Scope *p) {
+      child_scopes_.insert(std::make_pair(name, p));
+  }
+  /// Remove child scope.
+  void remove_child(std::string name) {
+      child_scopes_.erase(name);
+  }
 
   /** Determine how often a name has been defined.
    *
@@ -164,6 +215,61 @@ class Scope {
                               other.type_replacements_.begin(),
                               other.type_replacements_.end());
     user_defined_types_.merge(other.user_defined_types_);
+    child_scopes_.merge(other.child_scopes_);
+  }
+
+  std::string lookup_name(const std::string &name) {
+      // Qualified lookup.
+      if (type_names::is_qualified(name)) {
+          auto prefix = type_names::get_prefix(name);
+          auto found = child_scopes_.find(prefix);
+          if (found != child_scopes_.end()) {
+              return found->second->lookup_name(type_names::get_suffix(name));
+          }
+          return name;
+      }
+      // Unqualified lookup.
+      auto found = std::find(names_.begin(), names_.end(), name);
+      if (found != names_.end()) {
+          return get_prefix() + name;
+      }
+      // Unqualified lookup with replacement.
+      found = std::find(type_names_.begin(), type_names_.end(), name);
+      if (found != type_names_.end()) {
+          size_t index = found - type_names_.begin();
+          return type_replacements_[index];
+      }
+      return name;
+  }
+
+  /** Resolve type names in type.
+   *
+   * Iterates over identifiers in the given type name and replaces them with the
+   * qualified names that identify them at root scope.
+   *
+   * @param name String containing a C++ type name.
+   * @return The name with all unqualified names replaced with their qualified
+   * counterparts.
+   */
+  std::string get_qualified_name(std::string name) {
+
+    std::regex_iterator<std::string::iterator> it(name.begin(), name.end(), type_names::IDENTIFIER);
+    std::regex_iterator<std::string::iterator> end;
+
+    std::string output = name;
+
+    int output_offset = 0;
+
+    while (it != end) {
+        auto match = it->str();
+        auto repl = lookup_name(match);
+        if (repl != match) {
+            output.replace(it->position() + output_offset, match.size(), repl);
+            output_offset += repl.size() - match.size();
+        }
+        ++it;
+    }
+    return output;
   }
 
  protected:
@@ -172,7 +278,8 @@ class Scope {
   std::vector<std::string> names_ = {};
   std::vector<std::string> type_names_ = {};
   std::vector<std::string> type_replacements_ = {};
-  std::map<std::string, Type *> user_defined_types_;
+  std::map<std::string, Type *> user_defined_types_ = {};
+  std::map<std::string, Scope *> child_scopes_ = {};
 };
 
 }  // namespace cxx

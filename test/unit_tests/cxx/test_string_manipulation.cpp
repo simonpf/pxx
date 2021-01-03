@@ -35,3 +35,23 @@ TEST_CASE( "Replacement of type names.", "[cxx/string_manipulation]" ) {
                            {"float", "3"});
     REQUIRE( result == "my_namespace::MyClass1<float>::MyClass2<3>");
 }
+
+TEST_CASE( "Replacement of unqualified type names.", "[cxx/string_manipulation]" ) {
+
+    using pxx::cxx::detail::replace_unqualified_names;
+
+    auto result = replace_unqualified_names("MyClass<Scalar, N>",
+                                            {"Class", "Scalar", "N"},
+                                            {"Error", "float", "3"});
+    REQUIRE( result == "MyClass<float, 3>");
+
+    result = replace_unqualified_names("my_namespace::MyClass<Scalar, N>",
+                           {"Scalar", "N"},
+                           {"float", "3"});
+    REQUIRE( result == "my_namespace::MyClass<float, 3>");
+
+    result = replace_unqualified_names("my_namespace::MyClass1<Scalar>::MyClass2<N>",
+                           {"Scalar", "N"},
+                           {"float", "3"});
+    REQUIRE( result == "my_namespace::MyClass1<float>::MyClass2<3>");
+}

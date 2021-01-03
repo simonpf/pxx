@@ -151,12 +151,7 @@ class Type {
 
   /// The type's name that identifies it at root scope.
   std::string get_qualified_name() const {
-    std::vector<std::string> names, values;
-    std::tie(names, values) = scope_->get_type_replacements();
-
-    std::string qualified_name =
-        detail::replace_names(get_name(), names, values);
-    return qualified_name;
+      return scope_->get_qualified_name(get_name());
   }
 
   std::string get_unqualified_name() const {
@@ -846,14 +841,9 @@ class Constructor : public MemberFunction {
   Constructor(CXCursor c, LanguageObject *p) : MemberFunction(c, p) {
         if (p) {
             auto scope = p->get_scope();
-            std::cout << "CONSTRUCTOR " << name_ << ", scope: " << scope->get_name() << std::endl;
             auto replacements = scope->get_type_replacements();
             auto names = std::get<0>(replacements);
             auto values = std::get<1>(replacements);
-            for (size_t i = 0; i < names.size(); ++i) {
-                std::cout << names[i] << " // " << values[i] << std::endl;
-            }
-            std::cout << std::endl;
         }
 
     }
@@ -1105,7 +1095,6 @@ class Namespace : public LanguageObject {
       : LanguageObject(cursor, parent),
         scope_(name_, parent ? parent->get_scope() : nullptr) {
     if (parent) {
-        std::cout << "Adding namespace: " << get_qualified_name() << " / " << parent->get_name() << std::endl;
       parent->get_scope()->add_type_alias(name_, get_qualified_name());
     }
   }

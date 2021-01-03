@@ -4,6 +4,7 @@ add_executable(
   cxx/test_string_manipulation.cpp
   cxx/test_scope.cpp
   cxx/test_type_parser.cpp
+  cxx/test_type_names.cpp
   )
 target_include_directories(test_main PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(test_main Catch2::Catch2)

@@ -17,6 +17,7 @@ namespace detail {
 
 static std::regex EXPRESSION_REGEX = std::regex("(^|[^:a-zA-Z_])([a-zA-Z_][a-zA-Z0-9_]*)");
 
+
 /** Remove template arguments from type.
  *
  * @param s C++ type including a template type with given template argument.
@@ -76,7 +77,6 @@ inline std::string replace_names(std::string name,
         if ((n == ms) && (ms != values[i])) {
           std::string s = match.suffix();
           std::string repl = values[i];
-          std::cout << "MATCH :: " << name << " :: " << ms << " // " << repl << std::endl;
           if (n != repl.substr(0, n.size())) {
             if ((s.size() > 0) && (s[0] == '<')) {
               repl = remove_template_arguments(repl);
@@ -100,6 +100,49 @@ inline std::string replace_names(std::string name,
     result = output.str();
   }
   return result;
+}
+
+namespace detail {
+inline bool is_identifier_char(char c) { return (isalnum(c) || c == '_' || c == ':'); }
+
+inline bool has_prefix(const std::string &name, size_t position) {
+    return ((position > 0) && (is_identifier_char(name[position - 1])));
+}
+
+inline bool has_postfix(const std::string &name, size_t position) {
+    return ((position < name.size()) && (is_identifier_char(name[position])));
+}
+
+inline bool is_full_match(const std::string &full_name,
+                   const std::string &match,
+                   size_t position) {
+    return (!has_prefix(full_name, position)
+            && !has_postfix(full_name, position + match.size()));
+}
+
+
+} // namespace detail
+
+inline std::string
+replace_unqualified_names(std::string name,
+                          const std::vector<std::string> &names,
+                          const std::vector<std::string> &values) {
+  for (size_t i = 0; i < names.size(); ++i) {
+    auto n = names[i];
+    auto n_len = n.size();
+    auto r = values[i];
+    auto found = name.find(n);
+    while (found != std::string::npos) {
+
+      // Skip if previous char is part of identifier.
+      if (detail::is_full_match(name, n, found)) {
+        name = name.replace(found, n_len, r);
+      }
+      found = name.find(n, found + 1);
+
+    }
+  }
+  return name;
 }
 
 }  // namespace detail
