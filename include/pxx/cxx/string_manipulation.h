@@ -103,7 +103,8 @@ inline std::string replace_names(std::string name,
 }
 
 namespace detail {
-inline bool is_identifier_char(char c) { return (isalnum(c) || c == '_' || c == ':'); }
+inline bool is_identifier_char(char c) { return (isalnum(c) || c == '_' || c == ':' || c == '<'); }
+
 
 inline bool has_prefix(const std::string &name, size_t position) {
     return ((position > 0) && (is_identifier_char(name[position - 1])));

@@ -14,6 +14,11 @@
 namespace pxx {
 namespace cxx {
 
+class Scope;
+
+namespace detail {
+    std::string replace_names(const Scope *scope, std::string name);
+}  // namespace detail
 
 class Type;
 
@@ -44,7 +49,7 @@ class Scope {
    }
 
    /// The name of the scope.
-   std::string get_name() { return name_; }
+   std::string get_name() const { return name_; }
 
    /// Set the name of the scope.
    void set_name(std::string s) {
@@ -57,6 +62,16 @@ class Scope {
 
   /// Add a name to the scope.
   void add_name(std::string name) { names_.push_back(name); }
+
+  void replace_name(std::string old_name, std::string new_name) {
+      auto found = std::find(names_.begin(), names_.end(), old_name);
+      if (found != names_.end()) {
+          *found = new_name;
+      } else {
+          names_.push_back(new_name);
+      }
+  }
+
   /// Set the parent of the scope.
   void set_parent(Scope *p) {
       if (parent_scope_) {
@@ -189,7 +204,7 @@ class Scope {
   /** Get the type prefix of the current scope.
    * @return The prefix corresponding to the current scope.
    */
-  std::string get_prefix() {
+  std::string get_prefix() const {
     std::string name = "";
     if (parent_scope_) {
       name += parent_scope_->get_prefix();
@@ -215,31 +230,44 @@ class Scope {
                               other.type_replacements_.begin(),
                               other.type_replacements_.end());
     user_defined_types_.merge(other.user_defined_types_);
-    child_scopes_.merge(other.child_scopes_);
+
+    for (auto &s : other.child_scopes_) {
+        auto found = child_scopes_.find(s.first);
+        if (found != child_scopes_.end()) {
+            child_scopes_[s.first]->join(*s.second);
+        } else {
+            child_scopes_.insert(s);
+        }
+    }
+    //child_scopes_.merge(other.child_scopes_);
   }
 
-  std::string lookup_name(const std::string &name) {
-      // Qualified lookup.
-      if (type_names::is_qualified(name)) {
-          auto prefix = type_names::get_prefix(name);
-          auto found = child_scopes_.find(prefix);
-          if (found != child_scopes_.end()) {
-              return found->second->lookup_name(type_names::get_suffix(name));
-          }
-          return name;
+  std::string lookup_name(const std::string &name) const {
+    // Qualified lookup.
+    if (type_names::is_qualified(name)) {
+      auto prefix = type_names::get_prefix(name);
+      auto found = child_scopes_.find(prefix);
+      if (found != child_scopes_.end()) {
+        return found->second->lookup_name(type_names::get_suffix(name));
       }
-      // Unqualified lookup.
-      auto found = std::find(names_.begin(), names_.end(), name);
-      if (found != names_.end()) {
-          return get_prefix() + name;
-      }
-      // Unqualified lookup with replacement.
-      found = std::find(type_names_.begin(), type_names_.end(), name);
-      if (found != type_names_.end()) {
-          size_t index = found - type_names_.begin();
-          return type_replacements_[index];
-      }
-      return name;
+    }
+    // Unqualified lookup.
+    auto found = std::find(names_.begin(), names_.end(), name);
+    if (found != names_.end()) {
+      return get_prefix() + name;
+
+    }
+    // Unqualified lookup with replacement.
+    found = std::find(type_names_.begin(), type_names_.end(), name);
+    if (found != type_names_.end()) {
+      size_t index = found - type_names_.begin();
+      return detail::replace_names(this, type_replacements_[index]);
+    }
+
+    if (parent_scope_) {
+      return parent_scope_->lookup_name(name);
+    }
+    return "";
   }
 
   /** Resolve type names in type.
@@ -251,25 +279,8 @@ class Scope {
    * @return The name with all unqualified names replaced with their qualified
    * counterparts.
    */
-  std::string get_qualified_name(std::string name) {
-
-    std::regex_iterator<std::string::iterator> it(name.begin(), name.end(), type_names::IDENTIFIER);
-    std::regex_iterator<std::string::iterator> end;
-
-    std::string output = name;
-
-    int output_offset = 0;
-
-    while (it != end) {
-        auto match = it->str();
-        auto repl = lookup_name(match);
-        if (repl != match) {
-            output.replace(it->position() + output_offset, match.size(), repl);
-            output_offset += repl.size() - match.size();
-        }
-        ++it;
-    }
-    return output;
+  std::string get_qualified_name(std::string name) const {
+    return detail::replace_names(this, name);
   }
 
  protected:
@@ -281,6 +292,31 @@ class Scope {
   std::map<std::string, Type *> user_defined_types_ = {};
   std::map<std::string, Scope *> child_scopes_ = {};
 };
+
+namespace detail {
+
+    std::string replace_names(const Scope *scope, std::string name) {
+        std::regex_iterator<std::string::iterator> it(
+            name.begin(), name.end(), type_names::IDENTIFIER);
+        std::regex_iterator<std::string::iterator> end;
+
+        std::string output = name;
+
+        int output_offset = 0;
+
+        while (it != end) {
+            auto match = it->str();
+            auto repl = scope->lookup_name(match);
+            if ((repl != "") && (repl != match)) {
+                output.replace(it->position() + output_offset, match.size(), repl);
+                output_offset += repl.size() - match.size();
+            }
+            ++it;
+        }
+        return output;
+    }
+
+}  // namespace detail
 
 }  // namespace cxx
 }  // namespace pxx
