@@ -151,7 +151,7 @@ class Type {
 
   /// The type's name that identifies it at root scope.
   std::string get_qualified_name() const {
-      return scope_->get_qualified_name(get_name());
+    return scope_->get_qualified_name(get_name());
   }
 
   std::string get_unqualified_name() const {
@@ -166,6 +166,7 @@ class Type {
       return match[2];
     }
     return name_;
+
   }
   /** Replace template variables in type names.
    *
@@ -338,6 +339,8 @@ class DataMember : public Variable {
     } else {
       valid_ = false;
     }
+    p->get_scope()->add_name(name_);
+
   }
 
   /** Clone member variable.
@@ -449,9 +452,21 @@ class Template {
       }
       auto template_instance = template_->clone();
       template_instance->set_export_name(export_name);
+
+      auto old_name = template_instance->get_name();
+      auto instance_name = get_template_name(std::get<1>(is));
+      auto prefix = template_instance->get_parent()->get_scope()->get_prefix();
+
+      //template_instance->get_scope()->add_type_alias(old_name, prefix + instance_name);
       template_instance->set_name(get_template_name(std::get<1>(is)));
-      template_instance->replace_template_variables(template_arguments,
-                                                    std::get<1>(is));
+
+      std::vector<std::string> arguments = template_arguments;
+      arguments.push_back(old_name);
+      auto replacements = std::get<1>(is);
+      replacements.push_back(instance_name);
+      template_instance->replace_template_variables(arguments,
+                                                    replacements);
+
       instances.push_back(template_instance);
     }
     return instances;
@@ -534,14 +549,14 @@ class TypeAlias : public LanguageObject {
                          p->get_scope()) {
     p->get_scope()->register_type(to_string(clang_getCursorUSR(c)), &type_);
     p->get_scope()->add_type_alias(type_.get_unqualified_name(),
-                                   underlying_type_.get_qualified_name());
+                                   underlying_type_.get_name());
   }
 
   void update_reference(Type *type_ptr) {
     if ((type_ptr) && (underlying_type_ == *type_ptr)) {
       underlying_type_ = *type_ptr;
       parent_->get_scope()->add_type_alias(
-          name_, underlying_type_.get_qualified_name());
+          name_, underlying_type_.get_name());
     }
   }
 
@@ -555,7 +570,8 @@ class TypeAlias : public LanguageObject {
   void replace_template_variables(const std::vector<std::string> &names,
                                   const std::vector<std::string> &values) {
     std::string qualified_name = detail::replace_names(
-        underlying_type_.get_qualified_name(), names, values);
+        underlying_type_.get_name(), names, values);
+
     parent_->get_scope()->add_type_alias(type_.get_unqualified_name(),
                                         qualified_name);
   }
@@ -573,8 +589,10 @@ class TypeAlias : public LanguageObject {
 class TemplateAlias : public LanguageObject {
  public:
   TemplateAlias(CXCursor c, LanguageObject *p) : LanguageObject(c, p) {
-    p->get_scope()->add_type_alias(name_, get_qualified_name());
+    p->get_scope()->add_name(name_);
+    //p->get_scope()->add_type_alias(name_, get_qualified_name());
   }
+
 
   std::shared_ptr<TemplateAlias> clone(LanguageObject *p) {
     auto ta_new = pxx::cxx::clone(*this, p);
@@ -584,10 +602,13 @@ class TemplateAlias : public LanguageObject {
   void replace_template_variables(const std::vector<std::string> &names,
                                   const std::vector<std::string> &values) {
     std::string qualified_name =
-        detail::replace_names(get_qualified_name(), names, values);
-    parent_->get_scope()->add_type_alias(name_, qualified_name);
+        detail::replace_names(get_name(), names, values);
+    //parent_->get_scope()->add_type_alias(name_, qualified_name);
+    parent_->get_scope()->replace_name(name_, qualified_name);
+
   }
 };
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Enum
@@ -602,7 +623,7 @@ class Enum : public LanguageObject {
  public:
   Enum(CXCursor c, LanguageObject *p)
       : LanguageObject(c, p), scope_(name_, p ? p->get_scope() : nullptr) {
-    p->get_scope()->add_type_alias(get_name(), get_qualified_name());
+    p->get_scope()->add_name(get_name());
   }
 
   void add(std::shared_ptr<LanguageObject> c) { constants_.push_back(c); }
@@ -901,15 +922,18 @@ class Class : public LanguageObject {
         scope_(name_, p ? p->get_scope() : nullptr),
         usr_(to_string(clang_getCursorUSR(c))),
         type_(c, p->get_scope()) {
-    parent_scope_->add_type_alias(name_, get_qualified_name());
+
+    parent_scope_->add_name(name_);
     parent_scope_->register_type(usr_, &type_);
   }
+
 
   void set_name(std::string n) {
     std::string old_name = name_;
     LanguageObject::set_name(n);
     scope_.set_name(n);
-    parent_->get_scope()->add_type_alias(old_name, get_qualified_name());
+    //parent_->get_scope()->replace_name(old_name, name_);
+    //parent_->get_scope()->add_type_alias(old_name, get_qualified_name());
   }
 
   void set_parent(LanguageObject *p) {
@@ -1095,7 +1119,8 @@ class Namespace : public LanguageObject {
       : LanguageObject(cursor, parent),
         scope_(name_, parent ? parent->get_scope() : nullptr) {
     if (parent) {
-      parent->get_scope()->add_type_alias(name_, get_qualified_name());
+        //parent->get_scope()->add_type_alias(name_, get_qualified_name());
+      parent->get_scope()->add_name(name_);
     }
   }
   void set_parent(LanguageObject *p) {
@@ -1134,6 +1159,12 @@ class Namespace : public LanguageObject {
   }
   /// Add enum to namespace.
   void add(std::shared_ptr<Enum> e) { enums_.push_back(e); }
+
+  /// Add type alias to namespace.
+  void add(std::shared_ptr<TypeAlias> a) { type_aliases_.push_back(a); }
+
+  /// Add teplate type alias to namespace.
+  void add(std::shared_ptr<TemplateAlias> a) { template_aliases_.push_back(a); }
 
   std::vector<std::shared_ptr<Namespace>> get_namespaces() const {
     return namespaces_;
@@ -1291,6 +1322,8 @@ class Namespace : public LanguageObject {
   std::vector<std::shared_ptr<FunctionTemplate>> function_templates_;
   std::vector<std::shared_ptr<Namespace>> namespaces_;
   std::vector<std::shared_ptr<Enum>> enums_;
+  std::vector<std::shared_ptr<TypeAlias>> type_aliases_;
+  std::vector<std::shared_ptr<TemplateAlias>> template_aliases_;
 };
 
 std::ostream &operator<<(std::ostream &stream, const Namespace &ns) {
@@ -1436,6 +1469,13 @@ struct Parser<Namespace> {
       case CXCursor_EnumDecl: {
         ns->add(parse<Enum>(c, ns));
       } break;
+      case CXCursor_TypeAliasDecl: {
+          ns->add(parse<TypeAlias>(c, ns));
+      } break;
+      case CXCursor_TypedefDecl:
+      case CXCursor_TypeAliasTemplateDecl: {
+          ns->add(std::make_shared<TemplateAlias>(c, ns));
+      } break;
       default:
         break;
     }
@@ -1465,6 +1505,7 @@ struct Parser<Class> {
       case CXCursor_TypeAliasDecl: {
         cl->add(parse<TypeAlias>(c, cl));
       } break;
+      case CXCursor_TypedefDecl:
       case CXCursor_TypeAliasTemplateDecl: {
         cl->add(std::make_shared<TemplateAlias>(c, cl));
       } break;
@@ -1561,6 +1602,8 @@ struct Parser<Enum> {
       case CXCursor_EnumConstantDecl: {
         e->add(parse<LanguageObject>(c, e));
       } break;
+    default:
+        break;
     }
     return CXChildVisit_Continue;
   }
