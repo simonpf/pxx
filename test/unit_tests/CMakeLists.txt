@@ -1,3 +1,5 @@
+add_subdirectory(cxx)
+
 add_executable(
   test_main
   main.cpp
@@ -6,7 +8,6 @@ add_executable(
   cxx/test_type_parser.cpp
   cxx/test_type_names.cpp
   cxx/test_type_expression.cpp
-  cxx/test_parser.cpp
   )
 
 find_package(LibClang)

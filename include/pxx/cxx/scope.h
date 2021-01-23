@@ -33,6 +33,7 @@ class Type;
  */
 class Scope {
  public:
+
    /** Create a new scope.
     *
     * Creates a new scope with the given name and registers the scope as a child
