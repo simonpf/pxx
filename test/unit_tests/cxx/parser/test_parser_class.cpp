@@ -13,7 +13,7 @@ TEST_CASE( "parse_class", "[cxx/scope]" ) {
     ASTNode *root;
     std::tie(root, scope) = parser.parse();
     auto children = root->get_children();
-    auto member = reinterpret_cast<ClassMethodOverload *>(children["A"]);
+    auto member = reinterpret_cast<Overload<MemberFunction>*>(children["A"]);
 
     children = member->get_children();
 
@@ -44,4 +44,5 @@ TEST_CASE( "parse_class", "[cxx/scope]" ) {
     REQUIRE(protected_member->get_accessibility() == Accessibility::PROTECTED);
     auto protected_method = reinterpret_cast<Overload<MemberFunction>*>(children["protected_method"]);
     REQUIRE(protected_method->get_accessibility() == Accessibility::PROTECTED);
+
 }
