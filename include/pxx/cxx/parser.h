@@ -35,6 +35,10 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
     parent->add_child(child);
   } break;
 
+  //
+  // Classes
+  //
+
   // Class declaration.
   case CXCursor_Namespace: {
     auto child = scope->add<Namespace>(cursor, parent);
@@ -47,15 +51,21 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
   // Class constructor.
   case CXCursor_Constructor: {
       auto child = scope->add<Overload<Constructor>>(cursor, parent);
-      child->add_overload(cursor, reinterpret_cast<Class *>(parent));
+      child->add_overload(cursor);
       parent->add_child(child);
   } break;
 
   // Class member declaration.
   case CXCursor_CXXMethod: {
     auto child = scope->add<Overload<MemberFunction>>(cursor, parent);
-    child->add_overload(cursor, reinterpret_cast<Class *>(parent));
+    child->add_overload(cursor);
     parent->add_child(child);
+  } break;
+
+  // Class member variable.
+  case CXCursor_FieldDecl: {
+      auto child = scope->add<MemberVariable>(cursor, parent);
+      parent->add_child(child);
   } break;
 
   // Function definition.

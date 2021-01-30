@@ -168,6 +168,7 @@ enum class ASTNodeType {
   FUNCTION,
   CLASS,
   MEMBER_FUNCTION,
+  MEMBER_VARIABLE,
   CONSTRUCTOR,
   CLASS_TEMPLATE,
   FUNCTION_TEMPLATE,
@@ -176,6 +177,29 @@ enum class ASTNodeType {
   TEMPLATE_TYPE_ALIAS,
   UNDEFINED
 };
+
+enum class Accessibility { PUBLIC, PRIVATE, PROTECTED };
+
+namespace detail {
+/** Determine accessibility of cursor and convert to
+ *  Accessiblity enum.
+ *
+ * @param cursor libclang CXCursor referring to an C++ AST node
+ * whose access level should be determined.
+ * @return Accessiblity enum representing the AST nodes accessiblity.
+ */
+inline Accessibility get_accessibility(CXCursor cursor) {
+  CX_CXXAccessSpecifier as = clang_getCXXAccessSpecifier(cursor);
+  if (as == CX_CXXPublic) {
+    return Accessibility::PUBLIC;
+  } else if (as == CX_CXXProtected) {
+    return Accessibility::PROTECTED;
+  } else if (as == CX_CXXPrivate) {
+    return Accessibility::PRIVATE;
+  }
+  return Accessibility::PUBLIC;
+}
+} // namespace detail
 
 ////////////////////////////////////////////////////////////////////////////////
 // AST Node base class
@@ -197,9 +221,9 @@ public:
    * @param scope Pointer to the scope in which the AST node is defined.
    */
   ASTNode(CXCursor cursor, ASTNodeType type, ASTNode *parent, Scope *scope)
-      : type_(type), parent_(parent), scope_(scope) {
+      : type_(type), access_(detail::get_accessibility(cursor)), parent_(parent), scope_(scope)
+    {
     name_ = detail::get_name(cursor);
-
     auto location = detail::get_cursor_location(cursor);
     source_file_ = std::get<0>(location);
     line_ = std::get<1>(location);
@@ -211,6 +235,9 @@ public:
 
   /// The type of the node.
   ASTNodeType get_type() {return type_; }
+
+  /// The visibility of the node: public, protected or private.
+  Accessibility get_accessibility() { return access_; }
 
   /// The scope in which the symbol is defined.
   Scope* get_scope() { return scope_; }
@@ -265,6 +292,7 @@ public:
 
 protected:
   ASTNodeType type_;
+  Accessibility access_;
   ASTNode* parent_;
   Scope* scope_;
   std::string name_;
@@ -279,36 +307,15 @@ inline std::ostream &operator<<(std::ostream &out, const ASTNode &node) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Class
+// Namespace
 ////////////////////////////////////////////////////////////////////////////////
-
 
 class Namespace : public ASTNode {
 public:
-
-    Namespace(CXCursor cursor,
-              ASTNode *parent,
-              Scope *scope)
-        : ASTNode(cursor, ASTNodeType::NAMESPACE, parent, scope) {}
-
-
+  Namespace(CXCursor cursor, ASTNode *parent, Scope *scope)
+      : ASTNode(cursor, ASTNodeType::NAMESPACE, parent, scope) {}
 
 private:
-
-
-};
-
-class Class : public ASTNode {
-public:
-
-    Class(CXCursor cursor,
-          ASTNode *parent,
-          Scope *scope)
-        : ASTNode(cursor, ASTNodeType::CLASS, parent, scope) {}
-
-
-private:
-
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -320,51 +327,78 @@ private:
  * This class represents a specific function identified by its name
  * and call signature.
  */
-class Function {
-public:
-    /** Create a new function
-     * @params cursor libclang CXCursor object pointing to the function definition.
-     */
-  Function(CXCursor cursor) : name_(detail::get_name(cursor))
-    {
-        auto type = clang_getCursorType(cursor);
-        return_type_ = detail::get_type_spelling(clang_getResultType(type));
+class Function : public ASTNode {
+protected:
+  // Protected constructor used by child classes.
+  Function(CXCursor cursor, ASTNodeType node_type, ASTNode *parent,
+           Scope *scope)
+      : ASTNode(cursor, node_type, parent, scope) {
+    auto type = clang_getCursorType(cursor);
+    return_type_ = detail::get_type_spelling(clang_getResultType(type));
 
-        int n_args = clang_getNumArgTypes(type);
-        argument_types_.reserve(n_args);
-        for (int i = 0; i < n_args; ++i) {
-            argument_types_.emplace_back(
-                detail::get_type_spelling(clang_getArgType(type, i))
-                );
-        }
+    int n_args = clang_getNumArgTypes(type);
+    argument_types_.reserve(n_args);
+    for (int i = 0; i < n_args; ++i) {
+      argument_types_.emplace_back(
+          detail::get_type_spelling(clang_getArgType(type, i)));
     }
+  }
 
-    std::string get_name() const { return name_; }
+public:
+  /** Create a new function
+   * @params cursor libclang CXCursor object pointing to the function
+   * definition.
+   */
+  Function(CXCursor cursor, ASTNode *parent, Scope *scope)
+      : Function(cursor, ASTNodeType::FUNCTION, parent, scope) {}
 
-    /// Static function to determine the node type of this class.
-    static ASTNodeType get_node_type() { return ASTNodeType::FUNCTION; }
+  /// Static function to determine the node type of this class.
+  static ASTNodeType get_node_type() { return ASTNodeType::FUNCTION; }
 
-    inline friend std::ostream& operator<<(std::ostream &out, const Function &);
+  inline friend std::ostream &operator<<(std::ostream &out, const Function &);
 
 protected:
-
-    std::string name_ = "";
-    std::string return_type_ = "";
-    std::vector<std::string> argument_types_ = {};
-
+  std::string name_ = "";
+  std::string return_type_ = "";
+  std::vector<std::string> argument_types_ = {};
 };
 
-inline std::ostream& operator<<(std::ostream &out, const Function &function) {
-    out << function.return_type_ << " ()(";
-    for (size_t i = 0; i < function.argument_types_.size(); ++i) {
-        out << function.argument_types_[i];
-        if (i + 1 < function.argument_types_.size() ) {
-            out << ", ";
-        }
+inline std::ostream &operator<<(std::ostream &out, const Function &function) {
+  out << function.return_type_ << " ()(";
+  for (size_t i = 0; i < function.argument_types_.size(); ++i) {
+    out << function.argument_types_[i];
+    if (i + 1 < function.argument_types_.size()) {
+      out << ", ";
     }
-    out << ")";
-    return out;
+  }
+  out << ")";
+  return out;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Classes, constructors, member functions and variables
+////////////////////////////////////////////////////////////////////////////////
+
+/** A C++ class.
+ *
+ * This ASTNode class represents the definition of a C++ class.
+ */
+class Class : public ASTNode {
+public:
+  Class(CXCursor cursor, ASTNode *parent, Scope *scope)
+      : ASTNode(cursor, ASTNodeType::CLASS, parent, scope) {}
+
+private:
+};
+
+
+class MemberVariable : public ASTNode {
+public:
+MemberVariable(CXCursor cursor, ASTNode *parent, Scope *scope)
+    : ASTNode(cursor, ASTNodeType::MEMBER_VARIABLE, parent, scope) {}
+
+private:
+};
 
 /** Class member function.
  *
@@ -374,38 +408,41 @@ inline std::ostream& operator<<(std::ostream &out, const Function &function) {
  */
 class MemberFunction : public Function {
 
-  static const std::map<std::string, std::string> special_functions_;
+protected:
+
+  MemberFunction(CXCursor cursor, ASTNodeType type, ASTNode *parent,
+                 Scope *scope)
+      : Function(cursor, type, parent, scope),
+        is_const_(clang_CXXMethod_isConst(cursor)),
+        is_static_(clang_CXXMethod_isStatic(cursor)) {}
 
 public:
-MemberFunction(CXCursor c, Class *parent)
-      : Function(c),
-        is_const_(clang_CXXMethod_isConst(c)),
-      is_static_(clang_CXXMethod_isStatic(c)),
-      parent_(parent){}
+  MemberFunction(CXCursor cursor, ASTNode *parent, Scope *scope)
+      : MemberFunction(cursor, ASTNodeType::MEMBER_FUNCTION, parent, scope) {}
 
-
-  inline friend std::ostream &operator<<(std::ostream &out, const MemberFunction &);
+  inline friend std::ostream &operator<<(std::ostream &out,
+                                         const MemberFunction &);
 
   static ASTNodeType get_node_type() { return ASTNodeType::MEMBER_FUNCTION; }
 
 private:
   bool is_const_;
   bool is_static_;
-  Class* parent_;
 };
 
-inline std::ostream& operator<<(std::ostream &out, const MemberFunction &method) {
-    out << method.return_type_ << " ";
-    out <<  method.parent_->get_qualified_name();
-    out << "::" << method.get_name() << "(";
-    for (size_t i = 0; i < method.argument_types_.size(); ++i) {
-        out << method.argument_types_[i];
-        if (i + 1 < method.argument_types_.size() ) {
-            out << ", ";
-        }
+inline std::ostream &operator<<(std::ostream &out,
+                                const MemberFunction &method) {
+  out << method.return_type_ << " ";
+  out << method.parent_->get_qualified_name();
+  out << "::" << method.get_name() << "(";
+  for (size_t i = 0; i < method.argument_types_.size(); ++i) {
+    out << method.argument_types_[i];
+    if (i + 1 < method.argument_types_.size()) {
+      out << ", ";
     }
-    out << ")";
-    return out;
+  }
+  out << ")";
+  return out;
 }
 
 /** Class constructor.
@@ -418,7 +455,8 @@ class Constructor : public MemberFunction {
   static const std::map<std::string, std::string> special_functions_;
 
 public:
-  Constructor(CXCursor c, Class *parent) : MemberFunction(c, parent) {}
+  Constructor(CXCursor cursor, ASTNode *parent, Scope *scope)
+      : MemberFunction(cursor, ASTNodeType::CONSTRUCTOR, parent, scope) {}
 
   static ASTNodeType get_node_type() { return ASTNodeType::CONSTRUCTOR; }
 };
@@ -452,8 +490,8 @@ public:
   std::vector<FunctionClass> &get_overloads() { return functions_; }
 
   /// Add an overload to the function name.
-  template <typename... Args> void add_overload(Args&&... args) {
-    functions_.emplace_back(std::forward<Args>(args)...);
+  void add_overload(CXCursor cursor) {
+    functions_.emplace_back(cursor, parent_, scope_);
   }
 
   virtual void print_tree(std::ostream &out, size_t indent = 2,
