@@ -28,38 +28,49 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
 
   // Namespace declaration.
   case CXCursor_ClassDecl: {
-    auto child = std::make_unique<ASTNode>(cursor, ASTNodeType::NAMESPACE,
-                                           parent, scope);
-    auto new_scope = scope->add_child(child->get_name());
-    auto data = std::make_tuple(child.get(), new_scope);
+    auto child = scope->add<Class>(cursor, parent);
+    auto new_scope = scope->add_child_scope(child->get_name());
+    auto data = std::make_tuple(child, new_scope);
     clang_visitChildren(cursor, parse_clang_ast, &data);
-    parent->add_child(std::move(child));
+    parent->add_child(child);
   } break;
 
   // Class declaration.
   case CXCursor_Namespace: {
-    auto child =
-        std::make_unique<ASTNode>(cursor, ASTNodeType::CLASS, parent, scope);
-    auto new_scope = scope->add_child(child->get_name());
-    auto data = std::make_tuple(child.get(), new_scope);
+    auto child = scope->add<Namespace>(cursor, parent);
+    auto new_scope = scope->add_child_scope(child->get_name());
+    auto data = std::make_tuple(child, new_scope);
     clang_visitChildren(cursor, parse_clang_ast, &data);
     parent->add_child(std::move(child));
   } break;
 
+  // Class constructor.
+  case CXCursor_Constructor: {
+      auto child = scope->add<Overload<Constructor>>(cursor, parent);
+      child->add_overload(cursor, reinterpret_cast<Class *>(parent));
+      parent->add_child(child);
+  } break;
+
+  // Class member declaration.
+  case CXCursor_CXXMethod: {
+    auto child = scope->add<Overload<MemberFunction>>(cursor, parent);
+    child->add_overload(cursor, reinterpret_cast<Class *>(parent));
+    parent->add_child(child);
+  } break;
+
   // Function definition.
   case CXCursor_FunctionDecl: {
-    auto child = std::make_unique<ASTNode>(cursor, ASTNodeType::NAMESPACE,
-                                           parent, scope);
-    auto new_scope = scope->add_child(child->get_name());
-    parent->add_child(std::move(child));
+    auto child = scope->add<Overload<Function>>(cursor, parent);
+    child->add_overload(cursor);
+    parent->add_child(child);
   } break;
 
   default:
-      break;
+    break;
   }
   return CXChildVisit_Continue;
 }
-}
+} // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 // Parser class

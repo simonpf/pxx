@@ -3,6 +3,7 @@ add_executable(
   test_parser.cpp
   parser/test_parser_class.cpp
   parser/test_parser_namespace.cpp
+  parser/test_parser_function.cpp
   )
 
 find_package(LibClang)

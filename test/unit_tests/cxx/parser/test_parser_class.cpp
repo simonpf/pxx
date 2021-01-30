@@ -6,11 +6,16 @@
 TEST_CASE( "parse_class", "[cxx/scope]" ) {
 
     auto path = std::filesystem::path(__FILE__).parent_path();
-
     auto parser = pxx::cxx::Parser(path / "test_files" / "simple_class.h");
-    auto parsed = parser.parse();
 
-    std::get<0>(parsed)->print_tree(std::cout);
+    pxx::cxx::Scope *scope;
+    pxx::cxx::ASTNode *root;
+    std::tie(root, scope) = parser.parse();
 
+    auto children = root->get_children();
+
+    auto member = reinterpret_cast<pxx::cxx::ClassMethodOverload *>(children["A"]);
+
+    std::cout << *member << std::endl;
 
 }
