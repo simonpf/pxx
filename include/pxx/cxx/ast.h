@@ -5,5 +5,6 @@
 #include <pxx/cxx/ast/namespace.h>
 #include <pxx/cxx/ast/function.h>
 #include <pxx/cxx/ast/class.h>
+#include <pxx/cxx/ast/template.h>
 
 #endif

@@ -4,6 +4,7 @@ add_executable(
   parser/test_parser_class.cpp
   parser/test_parser_namespace.cpp
   parser/test_parser_function.cpp
+  parser/test_parser_template.cpp
   )
 
 find_package(LibClang)

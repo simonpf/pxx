@@ -18,26 +18,26 @@ namespace cxx {
 
 using pxx::to_string;
 namespace detail {
-inline std::string get_name(CXCursor c) {
-  CXString s = clang_getCursorSpelling(c);
-  return pxx::to_string(s);
-}
 
-inline std::string get_type_spelling(CXType t) {
-  CXString s = clang_getTypeSpelling(t);
-  return pxx::to_string(s);
-}
+    inline std::string get_name(CXCursor c) {
+        CXString s = clang_getCursorSpelling(c);
+        return pxx::to_string(s);
+    }
 
-std::tuple<std::filesystem::path, size_t, size_t> inline get_cursor_location(
-    CXCursor c) {
-  CXFile file;
-  unsigned line_number, column, offset;
-  auto location = clang_getCursorLocation(c);
-  clang_getSpellingLocation(location, &file, &line_number, &column, &offset);
-  std::string file_name = pxx::to_string(clang_getFileName(file));
-  return std::make_tuple(file_name, line_number, column);
-}
+    inline std::string get_type_spelling(CXType t) {
+        CXString s = clang_getTypeSpelling(t);
+        return pxx::to_string(s);
+    }
 
+    std::tuple<std::filesystem::path, size_t, size_t> inline get_cursor_location(
+        CXCursor c) {
+        CXFile file;
+        unsigned line_number, column, offset;
+        auto location = clang_getCursorLocation(c);
+        clang_getSpellingLocation(location, &file, &line_number, &column, &offset);
+        std::string file_name = pxx::to_string(clang_getFileName(file));
+        return std::make_tuple(file_name, line_number, column);
+    }
 } // namespace detail
 
 class ASTNode;

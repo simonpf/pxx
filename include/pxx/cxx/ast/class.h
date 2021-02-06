@@ -7,7 +7,9 @@
 #ifndef __PXX_CXX_AST_CLASS_H__
 #define __PXX_CXX_AST_CLASS_H__
 
+#include <pxx/clang.h>
 #include <pxx/cxx/ast/ast_node.h>
+#include <pxx/cxx/ast/template.h>
 
 namespace pxx {
 namespace cxx {
@@ -19,11 +21,26 @@ namespace cxx {
 class Class : public ASTNode {
 public:
   Class(CXCursor cursor, ASTNode *parent, Scope *scope)
-      : ASTNode(cursor, ASTNodeType::CLASS, parent, scope) {}
+      : ASTNode(cursor, ASTNodeType::CLASS, parent, scope) {
+
+    auto templ = clang_getSpecializedCursorTemplate(cursor);
+    if (!clang_Cursor_isNull(templ)) {
+      std::string qualified_name = pxx::clang::get_qualified_name(templ);
+      template_ = scope->lookup_symbol(qualified_name);
+    }
+  }
 
 private:
+  ASTNode *template_ = nullptr;
 };
 
+class ClassTemplate : public Template {
+public:
+  ClassTemplate(CXCursor cursor, ASTNode *parent, Scope *scope)
+      : Template(cursor, ASTNodeType::CLASS_TEMPLATE, parent, scope) {}
+};
+
+/// A class member variable.
 class MemberVariable : public ASTNode {
 public:
   MemberVariable(CXCursor cursor, ASTNode *parent, Scope *scope)

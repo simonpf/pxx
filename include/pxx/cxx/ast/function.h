@@ -7,6 +7,7 @@
 #define __PXX_CXX_AST_FUNCTION_H__
 
 #include <pxx/cxx/ast/ast_node.h>
+#include <pxx/cxx/ast/template.h>
 
 namespace pxx {
 namespace cxx {
@@ -56,6 +57,17 @@ protected:
   std::vector<std::string> argument_types_ = {};
 };
 
+class FunctionTemplate : public Template {
+public:
+    FunctionTemplate(CXCursor cursor,
+                     ASTNode *parent,
+                     Scope *scope)
+        : Template(cursor, ASTNodeType::FUNCTION_TEMPLATE, parent, scope)
+         {}
+    /// Static function to determine the node type of this class.
+    static ASTNodeType get_node_type() { return ASTNodeType::FUNCTION_TEMPLATE; }
+};
+
 inline std::ostream &operator<<(std::ostream &out, const Function &function) {
   out << function.return_type_ << " ()(";
   for (size_t i = 0; i < function.argument_types_.size(); ++i) {
@@ -93,11 +105,12 @@ public:
   size_t get_n_overloads() { return functions_.size(); }
 
   /// Return vector of overloads.
-  std::vector<FunctionClass> &get_overloads() { return functions_; }
+  std::vector<std::unique_ptr<FunctionClass>>& get_overloads() { return functions_; }
 
   /// Add an overload to the function name.
-  void add_overload(CXCursor cursor) {
-    functions_.emplace_back(cursor, parent_, scope_);
+  FunctionClass* add_overload(CXCursor cursor) {
+    functions_.emplace_back(std::make_unique<FunctionClass>(cursor, parent_, scope_));
+    return functions_.back().get();
   }
 
   virtual void print_tree(std::ostream &out, size_t indent = 2,
@@ -112,7 +125,7 @@ public:
   }
 
 protected:
-  std::vector<FunctionClass> functions_;
+  std::vector<std::unique_ptr<FunctionClass>> functions_;
 };
 
 } // namespace cxx

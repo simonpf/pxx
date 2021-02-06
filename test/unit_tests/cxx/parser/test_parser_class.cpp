@@ -5,7 +5,7 @@
 
 using namespace pxx::cxx;
 
-TEST_CASE( "parse_class", "[cxx/scope]" ) {
+TEST_CASE( "parse_class", "[cxx/parser]" ) {
 
     auto path = std::filesystem::path(__FILE__).parent_path();
     auto parser = Parser(path / "test_files" / "simple_class.h");

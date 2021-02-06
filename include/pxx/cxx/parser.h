@@ -75,6 +75,43 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
     parent->add_child(child);
   } break;
 
+  //
+  // Templates
+  //
+
+  case CXCursor_ClassTemplate: {
+      auto child = scope->add<ClassTemplate>(cursor, parent);
+      auto data = std::make_tuple(child, scope);
+      clang_visitChildren(cursor, parse_clang_ast, &data);
+      parent->add_child(child);
+  } break;
+
+  case CXCursor_ClassTemplatePartialSpecialization: {
+      std::string qualified_name = pxx::clang::get_qualified_name(cursor);
+      auto templ = dynamic_cast<ClassTemplate*>(scope->lookup_symbol(qualified_name));
+      templ->add_specialization(cursor);
+  } break;
+
+  case CXCursor_FunctionTemplate: {
+      auto child = scope->add<Overload<FunctionTemplate>>(cursor, parent);
+      auto function = child->add_overload(cursor);
+      auto data = std::make_tuple(function, scope);
+      clang_visitChildren(cursor, parse_clang_ast, &data);
+      parent->add_child(child);
+  } break;
+
+
+  case CXCursor_TemplateTypeParameter: {
+      auto t = reinterpret_cast<Template*>(parent);
+      t->add_template_parameter(cursor);
+  } break;
+
+  case CXCursor_NonTypeTemplateParameter: {
+      auto t = reinterpret_cast<Template*>(parent);
+      t->add_template_parameter(cursor);
+  } break;
+
+
   default:
     break;
   }

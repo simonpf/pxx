@@ -925,6 +925,8 @@ class Class : public LanguageObject {
 
     parent_scope_->add_name(name_);
     parent_scope_->register_type(usr_, &type_);
+
+    std::cout << "CLASS TMPL ARGS: " << clang_Cursor_getNumTemplateArguments(c) << std::endl;
   }
 
 

@@ -63,7 +63,6 @@ inline std::string get_qualified_name(CXCursor cursor) {
   while (!clang_isTranslationUnit(clang_getCursorKind(parent))) {
     names.push_back(get_cursor_name(parent));
     parent = clang_getCursorSemanticParent(parent);
-    std::cout << "parent: " << parent << std::endl;
   }
 
   std::stringstream stream = std::stringstream{};
