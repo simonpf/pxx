@@ -50,14 +50,18 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
 
   // Class constructor.
   case CXCursor_Constructor: {
-      auto child = scope->add<Overload<Constructor>>(cursor, parent);
+      auto child = dynamic_cast<Overload<Constructor>*>(
+          scope->add<Overload<Constructor>>(cursor, parent)
+          );
       child->add_overload(cursor);
       parent->add_child(child);
   } break;
 
   // Class member declaration.
   case CXCursor_CXXMethod: {
-    auto child = scope->add<Overload<MemberFunction>>(cursor, parent);
+      auto child = dynamic_cast<Overload<MemberFunction>*>(
+          scope->add<Overload<MemberFunction>>(cursor, parent)
+          );
     child->add_overload(cursor);
     parent->add_child(child);
   } break;
@@ -70,7 +74,9 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
 
   // Function definition.
   case CXCursor_FunctionDecl: {
-    auto child = scope->add<Overload<Function>>(cursor, parent);
+      auto child = dynamic_cast<Overload<Function>*>(
+          scope->add<Overload<Function>>(cursor, parent)
+          );
     child->add_overload(cursor);
     parent->add_child(child);
   } break;
@@ -89,17 +95,19 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
   case CXCursor_ClassTemplatePartialSpecialization: {
       std::string qualified_name = pxx::clang::get_qualified_name(cursor);
       auto templ = dynamic_cast<ClassTemplate*>(scope->lookup_symbol(qualified_name));
-      templ->add_specialization(cursor);
+      auto new_class = std::make_unique<Class>(cursor, parent, scope);
+      templ->add_specialization(cursor, std::move(new_class));
   } break;
 
   case CXCursor_FunctionTemplate: {
-      auto child = scope->add<Overload<FunctionTemplate>>(cursor, parent);
+      auto child = dynamic_cast<Overload<FunctionTemplate>*>(
+          scope->add<Overload<FunctionTemplate>>(cursor, parent)
+          );
       auto function = child->add_overload(cursor);
       auto data = std::make_tuple(function, scope);
       clang_visitChildren(cursor, parse_clang_ast, &data);
       parent->add_child(child);
   } break;
-
 
   case CXCursor_TemplateTypeParameter: {
       auto t = reinterpret_cast<Template*>(parent);

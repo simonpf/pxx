@@ -121,10 +121,10 @@ public:
   // Symbols
   //
 
-  template <typename T> T *add(CXCursor cursor, ASTNode *parent) {
+  template <typename T> ASTNode* add(CXCursor cursor, ASTNode *parent) {
     auto child = std::make_unique<T>(cursor, parent, this);
     auto result = symbols_.emplace(child->get_name(), std::move(child));
-    return reinterpret_cast<T *>(result.first->second.get());
+    return result.first->second.get();
   }
 
   /** Lookup a symbol in the scope.
@@ -221,7 +221,7 @@ public:
    */
   ASTNode(CXCursor cursor, ASTNodeType type, ASTNode *parent, Scope *scope)
       : type_(type), access_(detail::get_accessibility(cursor)),
-        parent_(parent), scope_(scope) {
+        parent_(parent), cursor_(cursor), scope_(scope) {
     name_ = detail::get_name(cursor);
     auto location = detail::get_cursor_location(cursor);
     source_file_ = std::get<0>(location);
@@ -294,6 +294,7 @@ protected:
   ASTNodeType type_;
   Accessibility access_;
   ASTNode *parent_;
+  CXCursor cursor_;
   Scope *scope_;
   std::string name_;
   std::map<std::string, ASTNode *> children_ = {};

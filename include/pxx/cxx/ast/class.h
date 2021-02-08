@@ -14,6 +14,12 @@
 namespace pxx {
 namespace cxx {
 
+class ClassTemplate : public Template {
+public:
+ClassTemplate(CXCursor cursor, ASTNode *parent, Scope *scope)
+    : Template(cursor, ASTNodeType::CLASS_TEMPLATE, parent, scope) {}
+};
+
 /** A C++ class.
  *
  * This ASTNode class represents the definition of a C++ class.
@@ -26,18 +32,12 @@ public:
     auto templ = clang_getSpecializedCursorTemplate(cursor);
     if (!clang_Cursor_isNull(templ)) {
       std::string qualified_name = pxx::clang::get_qualified_name(templ);
-      template_ = scope->lookup_symbol(qualified_name);
+      template_ = dynamic_cast<ClassTemplate*>(scope->lookup_symbol(qualified_name));
     }
   }
 
 private:
-  ASTNode *template_ = nullptr;
-};
-
-class ClassTemplate : public Template {
-public:
-  ClassTemplate(CXCursor cursor, ASTNode *parent, Scope *scope)
-      : Template(cursor, ASTNodeType::CLASS_TEMPLATE, parent, scope) {}
+  ClassTemplate *template_ = nullptr;
 };
 
 /// A class member variable.
