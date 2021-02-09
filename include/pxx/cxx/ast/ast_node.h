@@ -13,6 +13,8 @@
 #include <pxx/utils.h>
 #include <tuple>
 
+#include <pxx/clang.h>
+
 namespace pxx {
 namespace cxx {
 
@@ -121,19 +123,13 @@ public:
   // Symbols
   //
 
-  template <typename T> ASTNode* add(CXCursor cursor, ASTNode *parent) {
-    auto child = std::make_unique<T>(cursor, parent, this);
-    auto result = symbols_.emplace(child->get_name(), std::move(child));
-    return result.first->second.get();
-  }
-
   /** Lookup a symbol in the scope.
    *
    * @param name The name of the symbol to look up.
    * @return Pointer to the ASTNode object corresponding to the given name or
    * nullptr if no match was found.
    */
-  ASTNode *lookup_symbol(std::string name) {
+  ASTNode* lookup_symbol(std::string name) {
     size_t colons = name.find("::");
     if (colons != std::string::npos) {
       auto prefix = std::string(name, 0, colons);
@@ -147,11 +143,23 @@ public:
       if (symbol != symbols_.end()) {
         return symbol->second.get();
       }
+      return nullptr;
     }
     if (parent_) {
       return parent_->lookup_symbol(name);
     }
     return nullptr;
+  }
+
+  template <typename T> ASTNode* add(CXCursor cursor, ASTNode *parent) {
+    auto qualified_name = clang::get_qualified_name(cursor);
+    auto found = lookup_symbol(qualified_name);
+    if (found) {
+      return found;
+    }
+    auto child = std::make_unique<T>(cursor, parent, this);
+    auto result = symbols_.emplace(child->get_name(), std::move(child));
+    return result.first->second.get();
   }
 
 private:
@@ -221,7 +229,8 @@ public:
    */
   ASTNode(CXCursor cursor, ASTNodeType type, ASTNode *parent, Scope *scope)
       : type_(type), access_(detail::get_accessibility(cursor)),
-        parent_(parent), cursor_(cursor), scope_(scope) {
+        parent_(parent), cursor_(cursor), cursor_hash_(clang_hashCursor(cursor)),
+        scope_(scope) {
     name_ = detail::get_name(cursor);
     auto location = detail::get_cursor_location(cursor);
     source_file_ = std::get<0>(location);
@@ -231,6 +240,12 @@ public:
 
   /// The name of the node.
   const std::string &get_name() const { return name_; }
+
+  /// Return libclang cursor.
+  CXCursor get_cursor() const { return cursor_; }
+
+  /// Return cursor hash.
+  unsigned int get_cursor_hash() const { return cursor_hash_; }
 
   /// The type of the node.
   ASTNodeType get_type() { return type_; }
@@ -295,6 +310,7 @@ protected:
   Accessibility access_;
   ASTNode *parent_;
   CXCursor cursor_;
+  unsigned int cursor_hash_;
   Scope *scope_;
   std::string name_;
   std::map<std::string, ASTNode *> children_ = {};

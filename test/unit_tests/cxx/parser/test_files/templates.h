@@ -21,3 +21,11 @@ class Class<t, 0> {
 
 
 template class Class<int, 0>;
+
+namespace test {
+
+template <typename t, int N> class OtherClass {};
+template <typename t> class OtherClass<t, 0> {};
+} // namespace test
+
+template class test::OtherClass<int, 0>;

@@ -29,6 +29,11 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
   // Namespace declaration.
   case CXCursor_ClassDecl: {
     auto child = scope->add<Class>(cursor, parent);
+    if (child->get_type() == ASTNodeType::CLASS_TEMPLATE) {
+      auto templ = dynamic_cast<ClassTemplate*>(child);
+      templ->add_instance(
+          std::make_unique<Class>(cursor, parent, scope));
+    }
     auto new_scope = scope->add_child_scope(child->get_name());
     auto data = std::make_tuple(child, new_scope);
     clang_visitChildren(cursor, parse_clang_ast, &data);
@@ -96,7 +101,7 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
       std::string qualified_name = pxx::clang::get_qualified_name(cursor);
       auto templ = dynamic_cast<ClassTemplate*>(scope->lookup_symbol(qualified_name));
       auto new_class = std::make_unique<Class>(cursor, parent, scope);
-      templ->add_specialization(cursor, std::move(new_class));
+      templ->add_specialization(std::move(new_class));
   } break;
 
   case CXCursor_FunctionTemplate: {

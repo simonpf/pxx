@@ -18,7 +18,21 @@ TEST_CASE( "parse_template", "[cxx/parser]" ) {
     auto function = reinterpret_cast<Overload<Function>*>(children["function"]);
     REQUIRE(function->get_type() == ASTNodeType::FUNCTION_TEMPLATE);
 
-    auto cl = reinterpret_cast<Overload<Function>*>(children["Class"]);
+    auto cl = dynamic_cast<ClassTemplate*>(children["Class"]);
     REQUIRE(cl->get_type() == ASTNodeType::CLASS_TEMPLATE);
+
+
+    auto& instances = cl->get_instances();
+    REQUIRE(instances.size() == 1);
+
+    auto& specializations = cl->get_specializations();
+    REQUIRE(specializations.size() == 1);
+
+    cl = dynamic_cast<ClassTemplate*>(scope->lookup_symbol("test::OtherClass"));
+    REQUIRE(cl->get_type() == ASTNodeType::CLASS_TEMPLATE);
+    auto& other_instances = cl->get_instances();
+    REQUIRE(other_instances.size() == 1);
+    auto& other_specializations = cl->get_specializations();
+    REQUIRE(other_specializations.size() == 1);
 
 }
