@@ -32,9 +32,12 @@ public:
     auto templ = clang_getSpecializedCursorTemplate(cursor);
     if (!clang_Cursor_isNull(templ)) {
       std::string qualified_name = pxx::clang::get_qualified_name(templ);
-      template_ = dynamic_cast<ClassTemplate*>(scope->lookup_symbol(qualified_name));
+      auto tmpl = dynamic_cast<ClassTemplate*>(scope->lookup_symbol(qualified_name));
+      template_ = dynamic_cast<ClassTemplate*>(tmpl->get_template(templ));
     }
   }
+
+    const ClassTemplate* get_template() const { return template_; }
 
 private:
   ClassTemplate *template_ = nullptr;

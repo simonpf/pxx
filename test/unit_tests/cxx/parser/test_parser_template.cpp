@@ -35,4 +35,7 @@ TEST_CASE( "parse_template", "[cxx/parser]" ) {
     auto& other_specializations = cl->get_specializations();
     REQUIRE(other_specializations.size() == 1);
 
+    auto other_instance = dynamic_cast<Class*>(other_instances[0].get());
+    REQUIRE(other_instance->get_template() == other_specializations.begin()->second.get());
+
 }

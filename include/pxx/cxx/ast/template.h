@@ -29,7 +29,9 @@ public:
    * @param scope The scope in which the template is defined.
    */
   Template(CXCursor cursor, ASTNodeType type, ASTNode *parent, Scope *scope)
-      : ASTNode(cursor, type, parent, scope) {}
+      : ASTNode(cursor, type, parent, scope) {
+
+    }
 
     /** Add a template parameter to the template.
      * @param cursor The libclang cursor representing the parameter declaration.

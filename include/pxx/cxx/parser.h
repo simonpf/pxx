@@ -100,8 +100,15 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
   case CXCursor_ClassTemplatePartialSpecialization: {
       std::string qualified_name = pxx::clang::get_qualified_name(cursor);
       auto templ = dynamic_cast<ClassTemplate*>(scope->lookup_symbol(qualified_name));
-      auto new_class = std::make_unique<Class>(cursor, parent, scope);
-      templ->add_specialization(std::move(new_class));
+      auto type = templ->get_type();
+      if (type == ASTNodeType::CLASS_TEMPLATE) {
+          auto new_class = std::make_unique<ClassTemplate>(cursor, parent, scope);
+          templ->add_specialization(std::move(new_class));
+      }
+      if (type == ASTNodeType::FUNCTION_TEMPLATE) {
+          auto new_function = std::make_unique<FunctionTemplate>(cursor, parent, scope);
+          templ->add_specialization(std::move(new_function));
+      }
   } break;
 
   case CXCursor_FunctionTemplate: {
@@ -168,7 +175,7 @@ public:
     clang_visitChildren(
         cursor, AstFormatter::traverse, &formatter);
 
-    Scope *root_scope = new Scope("", nullptr);
+    Scope *root_scope = new Scope();
     ASTNode *root_node =
         new ASTNode(cursor, ASTNodeType::ROOT, nullptr, root_scope);
 

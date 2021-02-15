@@ -10,10 +10,11 @@
 #include <iostream>
 #include <map>
 #include <memory>
-#include <pxx/utils.h>
 #include <tuple>
 
 #include <pxx/clang.h>
+#include <pxx/cxx/scope.h>
+#include <pxx/utils.h>
 
 namespace pxx {
 namespace cxx {
@@ -41,133 +42,6 @@ namespace detail {
         return std::make_tuple(file_name, line_number, column);
     }
 } // namespace detail
-
-class ASTNode;
-
-/** Scope class to keep track of defined names.
- *
- * The Scope class handles the different name spaces in order to
- * be able to determine the qualified name of types, class and
- * functions.
- */
-class Scope {
-
-public:
-  /** Create a new scope.
-   * @param name The name of the new scope.
-   * @param parent Pointer to parent scope or nullptr if root scope.
-   */
-  Scope(std::string name, Scope *parent) : name_(name), parent_(parent) {}
-
-  /** Return scope prefix
-   *
-   * @retun The qualified name of the namespace including trailing double
-   * colons.
-   */
-  std::string get_prefix() {
-    std::string prefix = "";
-    if (parent_) {
-      prefix = parent_->get_prefix();
-    }
-    if (name_ != "") {
-      return prefix + name_ + "::";
-    }
-    return "";
-  }
-
-  //
-  // Child scopes
-  //
-
-  /** Add child scope.
-   *
-   * Adds a child scope with the given name to this scope.
-   * @param name The name of the child scope to add.
-   * @return Pointer to the created child scope.
-   */
-  Scope *add_child_scope(std::string name) {
-    auto result = children_.emplace(name, std::make_unique<Scope>(name, this));
-    return result.first->second.get();
-  }
-
-  /** Retrieve child scope by name.
-   *
-   * @param name The name of the child scope to retrieve.
-   * @returns Pointer to child scope with given name or nullptr
-   * if no such scope exists.
-   */
-  Scope *get_child_scope(std::string name) {
-    auto found = children_.find(name);
-    if (found != children_.end()) {
-      return found->second.get();
-    }
-    return nullptr;
-    auto colons = name.find("::");
-    if (colons != std::string::npos) {
-      auto prefix = std::string(name, 0, colons);
-      auto remainder = std::string(name, colons + 2, name.size() - colons - 2);
-      auto child = get_child_scope(prefix);
-      if (child) {
-        return child->get_child_scope(remainder);
-      }
-    } else {
-      auto child = children_.find(name);
-      if (child != children_.end()) {
-        return child->second.get();
-      }
-    }
-    return nullptr;
-  }
-
-  //
-  // Symbols
-  //
-
-  /** Lookup a symbol in the scope.
-   *
-   * @param name The name of the symbol to look up.
-   * @return Pointer to the ASTNode object corresponding to the given name or
-   * nullptr if no match was found.
-   */
-  ASTNode* lookup_symbol(std::string name) {
-    size_t colons = name.find("::");
-    if (colons != std::string::npos) {
-      auto prefix = std::string(name, 0, colons);
-      auto remainder = std::string(name, colons + 2, name.size() - colons - 2);
-      auto child = get_child_scope(prefix);
-      if (child) {
-        return child->lookup_symbol(remainder);
-      }
-    } else {
-      auto symbol = symbols_.find(name);
-      if (symbol != symbols_.end()) {
-        return symbol->second.get();
-      }
-      return nullptr;
-    }
-    if (parent_) {
-      return parent_->lookup_symbol(name);
-    }
-    return nullptr;
-  }
-
-  template <typename T> ASTNode* add(CXCursor cursor, ASTNode *parent) {
-    auto qualified_name = clang::get_qualified_name(cursor);
-    auto found = lookup_symbol(qualified_name);
-    if (found) {
-      return found;
-    }
-    auto child = std::make_unique<T>(cursor, parent, this);
-    auto result = symbols_.emplace(child->get_name(), std::move(child));
-    return result.first->second.get();
-  }
-
-private:
-  std::string name_;
-  Scope *parent_;
-  std::map<std::string, std::unique_ptr<Scope>> children_ = {};
-  std::map<std::string, std::unique_ptr<ASTNode>> symbols_ = {};
-};
 
 enum class ASTNodeType {
   ROOT,

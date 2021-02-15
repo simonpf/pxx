@@ -10,7 +10,10 @@
 #define __PXX_CLANG_H__
 
 #include <clang-c/Index.h>
+#include <filesystem>
 #include <string>
+
+#include <pxx/utils.h>
 
 namespace pxx {
 namespace clang {
