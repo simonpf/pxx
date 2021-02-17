@@ -95,7 +95,7 @@ public:
   }
 
   /// Whether or not any standard library headers are included.
-  bool has_std_namespace() {
+  bool has_std_namespace() const {
       auto child = children_.find("std");
       if (child != children_.end()) {
           return true;
@@ -104,7 +104,7 @@ public:
   }
 
   /// Whether or not the module makes use of the Eigen library.
-  bool has_eigen_namespace() {
+  bool has_eigen_namespace() const {
       auto child = children_.find("Eigen");
       if (child != children_.end()) {
           return true;
