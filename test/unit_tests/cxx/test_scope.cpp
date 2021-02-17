@@ -36,3 +36,16 @@ TEST_CASE( "Handling of children", "[cxx/scope]" ) {
 
     REQUIRE(result == namespace_1);
 }
+
+TEST_CASE( "std and Eigen headers.", "[cxx/scope]" ) {
+
+    using pxx::cxx::Scope;
+    using pxx::cxx::detail::replace_names;
+
+    Scope root_scope{};
+    root_scope.add_child_scope("std");
+    root_scope.add_child_scope("Eigen");
+
+    REQUIRE(root_scope.has_std_namespace());
+    REQUIRE(root_scope.has_eigen_namespace());
+}
