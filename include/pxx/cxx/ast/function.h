@@ -52,7 +52,6 @@ public:
   inline friend std::ostream &operator<<(std::ostream &out, const Function &);
 
 protected:
-  std::string name_ = "";
   std::string return_type_ = "";
   std::vector<std::string> argument_types_ = {};
 };

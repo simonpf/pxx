@@ -3,6 +3,9 @@
  * Defines the TypeExpression class for manipulating expression involving
  * types.
  */
+#ifndef __PXX_CXX_TYPE_EXPRESSION_H__
+#define __PXX_CXX_TYPE_EXPRESSION_H__
+
 #include <iostream>
 #include <locale>
 #include <string>
@@ -37,7 +40,7 @@ enum class IdentifierType { type_name, template_name, qualifier, end };
 class IdentifierIterator {
 
   /// Parses next identifier in string.
-  void parse_identifier();
+  inline void parse_identifier();
 
   /// Extract char and advance reading position.
   char consume() {
@@ -121,7 +124,7 @@ private:
   IdentifierType type_;
 };
 
-void IdentifierIterator::parse_identifier() {
+inline void IdentifierIterator::parse_identifier() {
 
 
   token_length_ = 0;
@@ -165,7 +168,7 @@ void IdentifierIterator::parse_identifier() {
   }
 }
 
-std::string replace_type_names(std::string spelling, Scope *scope) {
+inline std::string replace_type_names(std::string spelling, Scope *scope) {
   std::string result = spelling;
   types::IdentifierIterator iterator(result);
   std::string identifier = "";
@@ -208,3 +211,5 @@ std::string replace_type_names(std::string spelling, Scope *scope) {
 } // namespace types
 } // namespace cxx
 } // namespace pxx
+
+#endif

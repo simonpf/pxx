@@ -10,9 +10,31 @@
 #include <pxx/clang.h>
 #include <pxx/cxx/ast/ast_node.h>
 #include <pxx/cxx/ast/template.h>
+#include <pxx/cxx/type_expression.h>
 
 namespace pxx {
 namespace cxx {
+
+enum class Access { PUBLIC, PRIVATE, PROTECTED };
+namespace detail {
+inline Access get_access_level(CXCursor cursor) {
+  auto access_specifier = clang_getCXXAccessSpecifier(cursor);
+  switch (access_specifier) {
+  case CX_CXXPublic:
+    return Access::PUBLIC;
+    break;
+  case CX_CXXProtected:
+    return Access::PROTECTED;
+    break;
+  case CX_CXXPrivate:
+    return Access::PRIVATE;
+    break;
+  default:
+    break;
+  }
+  return Access::PRIVATE;
+}
+} // namespace detail
 
 class ClassTemplate : public Template {
 public:
@@ -26,6 +48,8 @@ ClassTemplate(CXCursor cursor, ASTNode *parent, Scope *scope)
  */
 class Class : public ASTNode {
 public:
+
+
   Class(CXCursor cursor, ASTNode *parent, Scope *scope)
       : ASTNode(cursor, ASTNodeType::CLASS, parent, scope) {
 
@@ -43,7 +67,7 @@ public:
         auto qualified_name = get_qualified_name();
         output << "{" << std::endl;
         output << "  py::class_<" << qualified_name << "> py_class";
-        output << "{module, \"" << name_ << "\"}" << std::endl;
+        output << "{module, \"" << name_ << "\"};" << std::endl;
         for (auto &c : children_) {
             c.second->write_bindings(output);
         }
@@ -63,6 +87,8 @@ public:
 private:
 };
 
+using types::replace_type_names;
+
 /** Class member function.
  *
  * Specialization of Function class to take into account the
@@ -71,36 +97,52 @@ private:
  */
 class MemberFunction : public Function {
 
+
 protected:
   MemberFunction(CXCursor cursor, ASTNodeType type, ASTNode *parent,
                  Scope *scope)
       : Function(cursor, type, parent, scope),
         is_const_(clang_CXXMethod_isConst(cursor)),
-        is_static_(clang_CXXMethod_isStatic(cursor)) {}
+        is_static_(clang_CXXMethod_isStatic(cursor)) {
+    }
 
 public:
   MemberFunction(CXCursor cursor, ASTNode *parent, Scope *scope)
-      : MemberFunction(cursor, ASTNodeType::MEMBER_FUNCTION, parent, scope) {}
+      : MemberFunction(cursor, ASTNodeType::MEMBER_FUNCTION, parent, scope) {
+        access_level_ = detail::get_access_level(cursor);
+    }
 
   inline friend std::ostream &operator<<(std::ostream &out,
                                          const MemberFunction &);
 
+  std::string get_pointer_spelling() const {
+      std::string parent_name = parent_->get_qualified_name();
+      std::string return_type = replace_type_names(return_type_, scope_);
+      std::string result = return_type + "(" + parent_name + "*)(";
+      for (size_t i = 0; i < argument_types_.size(); ++i) {
+          result += replace_type_names(argument_types_[i], scope_);
+          if (i + 1 < argument_types_.size()) {
+              result += ", ";
+          }
+      }
+      result += ")";
+      return result;
+  }
+
   static ASTNodeType get_node_type() { return ASTNodeType::MEMBER_FUNCTION; }
 
-  void write_bindings(std::ostream& output) const override {
+  void write_bindings(std::ostream &output) const override {
+    if (access_level_ == Access::PUBLIC) {
       auto qualified_name = get_qualified_name();
-      output << "{" << std::endl;
-      output << "  py::class_<" << qualified_name << "> py_class";
-      output << "{module, \"" << name_ << "\"}" << std::endl;
-      for (auto &c : children_) {
-          c.second->write_bindings(output);
-      }
-      output << "}" << std::endl;
+      output << "  py_class.def(" << name_ << ", &" << qualified_name << ");";
+      output << std::endl;
+  }
   }
 
 private:
   bool is_const_;
   bool is_static_;
+  Access access_level_;
 };
 
 inline std::ostream &operator<<(std::ostream &out,
@@ -129,9 +171,26 @@ class Constructor : public MemberFunction {
 
 public:
   Constructor(CXCursor cursor, ASTNode *parent, Scope *scope)
-      : MemberFunction(cursor, ASTNodeType::CONSTRUCTOR, parent, scope) {}
+      : MemberFunction(cursor, ASTNodeType::CONSTRUCTOR, parent, scope) {
+      std::cout << "constructor: " << parent->get_name() << std::endl;
+
+  }
 
   static ASTNodeType get_node_type() { return ASTNodeType::CONSTRUCTOR; }
+
+  void write_bindings(std::ostream &output) const override {
+      auto qualified_name = get_qualified_name();
+      output << "  py_class.def("
+             << "py::init<";
+      for (size_t i = 0; i < argument_types_.size(); ++i) {
+          std::string type = argument_types_[i];
+          output << types::replace_type_names(type, scope_);
+          if (i + 1 < argument_types_.size()) {
+              output << ", ";
+          }
+      }
+      output << ">());" << std::endl;
+  }
 };
 
 } // namespace cxx

@@ -3,6 +3,9 @@
  * This file contains general definition that are required in multiple
  * places.
  */
+#ifndef __PXX_CXX_COMMON_H__
+#define __PXX_CXX_COMMON_H__
+
 #include <unordered_set>
 #include <string>
 
@@ -114,3 +117,5 @@ is_keyword(std::string identifier) {
 
 } // namespace cxx
 } // namespace pxx
+
+#endif
