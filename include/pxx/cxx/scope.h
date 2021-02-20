@@ -51,6 +51,12 @@ public:
     return prefix + name_ + "::";
   }
 
+  /// The scope at the root of the current scope hierarchy.
+  Scope* get_root_scope() {
+      if (parent_) return parent_->get_root_scope();
+      return this;
+  }
+
   //
   // Child scopes
   //

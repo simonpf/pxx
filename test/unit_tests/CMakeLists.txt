@@ -7,7 +7,6 @@ add_executable(
   cxx/test_scope.cpp
   cxx/test_type_parser.cpp
   cxx/test_type_names.cpp
-  cxx/test_type_expression.cpp
   test_writer.cpp
   )
 

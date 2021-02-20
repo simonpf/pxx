@@ -8,6 +8,8 @@
 #include <string>
 
 #include <pxx/cxx/common.h>
+#include <pxx/cxx/scope.h>
+#include <pxx/cxx/ast.h>
 
 namespace pxx {
 namespace cxx {
@@ -40,8 +42,8 @@ class IdentifierIterator {
   /// Extract char and advance reading position.
   char consume() {
     char c = 0;
-    if (position_ < (spelling_->size() - 1)) {
-      ++position_;
+    ++position_;
+    if (position_ < (spelling_->size())) {
       c = (*spelling_)[position_];
     }
     return c;
@@ -87,8 +89,28 @@ public:
   /// Check if iterator is exhausted.
   operator bool() const { return type_ != IdentifierType::end; }
 
+  std::string operator*() {
+      return std::string(*spelling_, token_start_, token_length_);
+  }
+
+  /// Start position of current token.
+  size_t get_token_start() {
+      return token_start_;
+  }
+
+  /// Length of current token.
+  size_t get_token_length() {
+      return token_length_;
+  }
+
   void operator=(std::string replacement) {
     spelling_->replace(token_start_, token_length_, replacement);
+    position_ = token_start_ + replacement.size();
+    token_length_ = replacement.size();
+  }
+
+  void replace(size_t start, size_t length, std::string replacement) {
+    spelling_->replace(start, length, replacement);
     position_ = token_start_ + replacement.size();
     token_length_ = replacement.size();
   }
@@ -100,6 +122,7 @@ private:
 };
 
 void IdentifierIterator::parse_identifier() {
+
 
   token_length_ = 0;
   type_ = IdentifierType::end;
@@ -140,6 +163,46 @@ void IdentifierIterator::parse_identifier() {
   while ((!detail::is_identifier_char(current_char)) && (current_char != 0)) {
     current_char = consume();
   }
+}
+
+std::string replace_type_names(std::string spelling, Scope *scope) {
+  std::string result = spelling;
+  types::IdentifierIterator iterator(result);
+  std::string identifier = "";
+
+  size_t start = 0;
+
+  do {
+    auto type = iterator.get_type();
+    switch (type) {
+    case types::IdentifierType::qualifier: {
+      if (identifier != "") {
+        identifier = identifier + "::" + *iterator;
+      } else {
+        identifier = *iterator;
+        start = iterator.get_token_start();
+      }
+    } break;
+    case types::IdentifierType::template_name:
+    case types::IdentifierType::type_name: {
+      if (identifier != "") {
+        identifier = identifier + "::" + *iterator;
+      } else {
+        start = iterator.get_token_start();
+        identifier = *iterator;
+      }
+      std::cout << "Looking up: " << identifier << std::endl;
+      auto symbol = scope->lookup_symbol(identifier);
+      if (symbol) {
+          iterator.replace(start, identifier.size(), symbol->get_qualified_name());
+      }
+      identifier = "";
+    } break;
+    default:
+        break;
+    }
+  } while (++iterator);
+  return result;
 }
 
 } // namespace types

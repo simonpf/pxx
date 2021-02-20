@@ -169,8 +169,21 @@ public:
   /** Return qualified name of AST node.
    * @return The name of the node that identifies it at the root scope.
    */
-  virtual std::string get_qualified_name() {
+  virtual std::string get_qualified_name() const {
     return scope_->get_prefix() + name_;
+  }
+
+  /** Write bindings for this AST node to output stream.
+   *
+   * This function should write the pybind11 bindings for the AST node
+   * and its childrent to the given output stream.
+   *
+   * @param output The output stream to write the data to.
+   */
+  virtual void write_bindings(std::ostream& output) const {
+      for (auto &c : children_) {
+          c.second->write_bindings(output);
+      }
   }
 
   //

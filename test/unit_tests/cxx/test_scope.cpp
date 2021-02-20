@@ -1,14 +1,12 @@
 #include <tuple>
 
 #include "catch2/catch.hpp"
-#include "pxx/cxx/string_manipulation.h"
 #include "pxx/cxx/scope.h"
 #include "pxx/cxx/ast.h"
 
 TEST_CASE( "Definition of types.", "[cxx/scope]" ) {
 
     using pxx::cxx::Scope;
-    using pxx::cxx::detail::replace_names;
 
     Scope root_scope{};
     auto namespace_1 = root_scope.add_child_scope("namespace");
@@ -28,7 +26,6 @@ TEST_CASE( "Definition of types.", "[cxx/scope]" ) {
 TEST_CASE( "Handling of children", "[cxx/scope]" ) {
 
     using pxx::cxx::Scope;
-    using pxx::cxx::detail::replace_names;
 
     Scope root_scope{};
     auto namespace_1 = root_scope.add_child_scope("namespace");
@@ -40,7 +37,18 @@ TEST_CASE( "Handling of children", "[cxx/scope]" ) {
 TEST_CASE( "std and Eigen headers.", "[cxx/scope]" ) {
 
     using pxx::cxx::Scope;
-    using pxx::cxx::detail::replace_names;
+
+    Scope root_scope{};
+    root_scope.add_child_scope("std");
+    root_scope.add_child_scope("Eigen");
+
+    REQUIRE(root_scope.has_std_namespace());
+    REQUIRE(root_scope.has_eigen_namespace());
+}
+
+TEST_CASE( "Replacement of type names", "[cxx/scope]" ) {
+
+    using pxx::cxx::Scope;
 
     Scope root_scope{};
     root_scope.add_child_scope("std");

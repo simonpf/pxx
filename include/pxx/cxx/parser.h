@@ -50,7 +50,7 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
     auto new_scope = scope->add_child_scope(child->get_name());
     auto data = std::make_tuple(child, new_scope);
     clang_visitChildren(cursor, parse_clang_ast, &data);
-    parent->add_child(std::move(child));
+    parent->add_child(child);
   } break;
 
   // Class constructor.
@@ -58,8 +58,8 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
       auto child = dynamic_cast<Overload<Constructor>*>(
           scope->add<Overload<Constructor>>(cursor, parent)
           );
-      child->add_overload(cursor);
-      parent->add_child(child);
+      auto constructor = child->add_overload(cursor);
+      parent->add_child(constructor);
   } break;
 
   // Class member declaration.
@@ -67,8 +67,8 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
       auto child = dynamic_cast<Overload<MemberFunction>*>(
           scope->add<Overload<MemberFunction>>(cursor, parent)
           );
-    child->add_overload(cursor);
-    parent->add_child(child);
+    auto method = child->add_overload(cursor);
+    parent->add_child(method);
   } break;
 
   // Class member variable.
@@ -79,11 +79,11 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
 
   // Function definition.
   case CXCursor_FunctionDecl: {
-      auto child = dynamic_cast<Overload<Function>*>(
-          scope->add<Overload<Function>>(cursor, parent)
-          );
-    child->add_overload(cursor);
-    parent->add_child(child);
+    auto child = dynamic_cast<Overload<Function>*>(
+        scope->add<Overload<Function>>(cursor, parent)
+        );
+    auto func = child->add_overload(cursor);
+    parent->add_child(func);
   } break;
 
   //

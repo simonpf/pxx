@@ -44,29 +44,40 @@ void write_file_header(std::ostream &output,
   for (auto &i : settings.includes) {
     output << "#include " << i << std::endl;
   }
+  output << std::endl;
+  output << "namespace py = pybind11;" << std::endl;
+  output << std::endl;
 }
 
 } // namespace detail
 
+/** Writer class
+ *
+ * The writer class manages the writing of interface files to
+ * output streams.
+ */
 class Writer {
 
 public:
-  Writer(std::ostream &output)
+  Writer(std::ostream& output)
       : output_(output) {}
 
 
     void write(const cxx::Scope* scope,
-               const cxx::ASTNode* /*ast*/,
+               const cxx::ASTNode* ast,
                const Settings settings) {
 
         detail::write_file_header(output_,
                                   scope,
                                   settings);
+        if (ast) {
+            ast->write_bindings(output_);
+        }
     }
 
 
 private:
-  std::ostream &output_;
+  std::ostream& output_;
 };
 
 } // namespace pxx

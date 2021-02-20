@@ -39,6 +39,17 @@ public:
 
     const ClassTemplate* get_template() const { return template_; }
 
+    void write_bindings(std::ostream& output) const override {
+        auto qualified_name = get_qualified_name();
+        output << "{" << std::endl;
+        output << "  py::class_<" << qualified_name << "> py_class";
+        output << "{module, \"" << name_ << "\"}" << std::endl;
+        for (auto &c : children_) {
+            c.second->write_bindings(output);
+        }
+        output << "}" << std::endl;
+    }
+
 private:
   ClassTemplate *template_ = nullptr;
 };
@@ -75,6 +86,17 @@ public:
                                          const MemberFunction &);
 
   static ASTNodeType get_node_type() { return ASTNodeType::MEMBER_FUNCTION; }
+
+  void write_bindings(std::ostream& output) const override {
+      auto qualified_name = get_qualified_name();
+      output << "{" << std::endl;
+      output << "  py::class_<" << qualified_name << "> py_class";
+      output << "{module, \"" << name_ << "\"}" << std::endl;
+      for (auto &c : children_) {
+          c.second->write_bindings(output);
+      }
+      output << "}" << std::endl;
+  }
 
 private:
   bool is_const_;
