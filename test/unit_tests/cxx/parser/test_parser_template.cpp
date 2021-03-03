@@ -15,10 +15,14 @@ TEST_CASE( "parse_template", "[cxx/parser]" ) {
     std::tie(root, scope) = parser.parse();
     auto children = root->get_children();
 
-    auto function = reinterpret_cast<Overload<Function>*>(children["function"]);
+    auto function = reinterpret_cast<Overload<Function>*>(
+        scope->lookup_symbol("function")
+        );
     REQUIRE(function->get_type() == ASTNodeType::FUNCTION_TEMPLATE);
 
-    auto cl = dynamic_cast<ClassTemplate*>(children["Class"]);
+    auto cl = dynamic_cast<ClassTemplate*>(
+        scope->lookup_symbol("Class")
+        );
     REQUIRE(cl->get_type() == ASTNodeType::CLASS_TEMPLATE);
 
 

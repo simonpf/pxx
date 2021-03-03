@@ -14,8 +14,9 @@ TEST_CASE( "parse_function", "[cxx/parser]" ) {
     ASTNode *root;
     std::tie(root, scope) = parser.parse();
 
-    auto children = root->get_children();
-    auto function = reinterpret_cast<Overload<Function>*>(children["function1"]);
+    auto function = reinterpret_cast<Overload<Function>*>(
+        scope->lookup_symbol("function1")
+        );
 
     REQUIRE(function->get_type() == ASTNodeType::FUNCTION);
     REQUIRE(function->get_name() == "function1");

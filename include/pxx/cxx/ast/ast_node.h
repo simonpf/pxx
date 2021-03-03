@@ -103,8 +103,8 @@ public:
    */
   ASTNode(CXCursor cursor, ASTNodeType type, ASTNode *parent, Scope *scope)
       : type_(type), access_(detail::get_accessibility(cursor)),
-        parent_(parent), cursor_(cursor), cursor_hash_(clang_hashCursor(cursor)),
-        scope_(scope) {
+        parent_(parent), cursor_(cursor),
+        cursor_hash_(clang_hashCursor(cursor)), scope_(scope) {
     name_ = detail::get_name(cursor);
     auto location = detail::get_cursor_location(cursor);
     source_file_ = std::get<0>(location);
@@ -131,14 +131,11 @@ public:
   Scope *get_scope() { return scope_; }
 
   /// Return childrent map.
-  const std::map<std::string, ASTNode *> &get_children() const {
-    return children_;
-  }
+  const std::vector<ASTNode *> &get_children() const { return children_; }
 
   /// Add child to node.
   ASTNode *add_child(ASTNode *child) {
-    auto result = children_.emplace(child->get_name(), child);
-    return result.first->second;
+    return children_.emplace_back(child);
   }
 
   //
@@ -161,8 +158,8 @@ public:
     out << std::setw(offset) << "";
     out << "ASTNode: " << name_ << "(" << source_file_.filename() << ")"
         << std::endl;
-    for (auto &c : children_) {
-      c.second->print_tree(out, indent, offset + indent);
+    for (auto& c : children_) {
+      c->print_tree(out, indent, offset + indent);
     }
   }
 
@@ -180,10 +177,10 @@ public:
    *
    * @param output The output stream to write the data to.
    */
-  virtual void write_bindings(std::ostream& output) const {
-      for (auto &c : children_) {
-          c.second->write_bindings(output);
-      }
+  virtual void write_bindings(std::ostream &output) const {
+    for (auto& c : children_) {
+      c->write_bindings(output);
+    }
   }
 
   //
@@ -200,7 +197,7 @@ protected:
   unsigned int cursor_hash_;
   Scope *scope_;
   std::string name_;
-  std::map<std::string, ASTNode *> children_ = {};
+  std::vector<ASTNode *> children_ = {};
   std::filesystem::path source_file_;
   size_t line_, column_;
 };

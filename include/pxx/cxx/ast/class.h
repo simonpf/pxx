@@ -69,7 +69,7 @@ public:
         output << "  py::class_<" << qualified_name << "> py_class";
         output << "{module, \"" << name_ << "\"};" << std::endl;
         for (auto &c : children_) {
-            c.second->write_bindings(output);
+            c->write_bindings(output);
         }
         output << "}" << std::endl;
     }
