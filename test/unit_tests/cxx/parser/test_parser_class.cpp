@@ -12,7 +12,6 @@ TEST_CASE( "parse_class", "[cxx/parser]" ) {
     Scope *scope;
     ASTNode *root;
     std::tie(root, scope) = parser.parse();
-    auto member = reinterpret_cast<Overload<MemberFunction>*>(scope->lookup_symbol("A"));
 
     // Constructors
     auto constructors = reinterpret_cast<Overload<Constructor>*>(scope->lookup_symbol("A::A"));

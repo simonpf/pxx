@@ -10,6 +10,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <tuple>
 
 #include <pxx/clang.h>
@@ -106,6 +107,7 @@ public:
         parent_(parent), cursor_(cursor),
         cursor_hash_(clang_hashCursor(cursor)), scope_(scope) {
     name_ = detail::get_name(cursor);
+    comment_ = pxx::to_string(clang_Cursor_getRawCommentText(cursor));
     auto location = detail::get_cursor_location(cursor);
     source_file_ = std::get<0>(location);
     line_ = std::get<1>(location);
@@ -183,6 +185,14 @@ public:
     }
   }
 
+  std::string print_comment_as_raw_string() const {
+      std::stringstream stream;
+      stream << "R\"__PXX_RAW_STRING__(\n";
+      stream << comment_ << std::endl;
+      stream << ")__PXX_RAW_STRING__\"";
+      return stream.str();
+  }
+
   //
   // Friends
   //
@@ -197,6 +207,7 @@ protected:
   unsigned int cursor_hash_;
   Scope *scope_;
   std::string name_;
+  std::string comment_;
   std::vector<ASTNode *> children_ = {};
   std::filesystem::path source_file_;
   size_t line_, column_;

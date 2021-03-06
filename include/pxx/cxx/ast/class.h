@@ -82,9 +82,31 @@ private:
 class MemberVariable : public ASTNode {
 public:
   MemberVariable(CXCursor cursor, ASTNode *parent, Scope *scope)
-      : ASTNode(cursor, ASTNodeType::MEMBER_VARIABLE, parent, scope) {}
+      : ASTNode(cursor, ASTNodeType::MEMBER_VARIABLE, parent, scope),
+        is_const_(clang_CXXMethod_isConst(cursor)),
+        is_static_(clang_CXXMethod_isStatic(cursor)) {
+    access_level_ = detail::get_access_level(cursor);
+  }
+
+  void write_bindings(std::ostream &output) const override {
+    auto qualified_name = get_qualified_name();
+    if (access_level_ == Access::PUBLIC) {
+      if (is_const_) {
+        output << "  py_class.def_readonly(" << name_ << ", &"
+               << qualified_name;
+        output << ");" << std::endl;
+      } else {
+        output << "  py_class.def_readwrite(" << name_ << ", &"
+               << qualified_name;
+        output << ");" << std::endl;
+      }
+    }
+  }
 
 private:
+  bool is_const_;
+  bool is_static_;
+  Access access_level_;
 };
 
 using types::replace_type_names;
@@ -134,7 +156,12 @@ public:
   void write_bindings(std::ostream &output) const override {
     if (access_level_ == Access::PUBLIC) {
       auto qualified_name = get_qualified_name();
-      output << "  py_class.def(" << name_ << ", &" << qualified_name << ");";
+      if (comment_ == "") {
+          output << "  py_class.def(" << name_ << ", &" << qualified_name << ");";
+      } else {
+          output << "  py_class.def(" << name_ << ", &" << qualified_name << ",";
+          output << std::endl << print_comment_as_raw_string() << ");";
+      }
       output << std::endl;
   }
   }

@@ -11,8 +11,14 @@ public:
   A() {}
   A(int) {}
 
+  /// A public method.
   void public_method_1() {}
+  /// Another public method.
   int public_method_1(int) {}
+
+  /** A doxygen documented method.
+   * @param a A parameter.
+   */
   int public_method_2(float) { return 0 }
 
   char public_member = 'a';
