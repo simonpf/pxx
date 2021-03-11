@@ -32,12 +32,6 @@ namespace detail {
 class Input {
 
 private:
-  char current_char() {
-    if (pos_ >= n_chars_) {
-      return 0;
-    }
-    return input_[pos_];
-  }
 
   void drop_whitespace() {
     while (iswspace(current_char())) {
@@ -62,6 +56,16 @@ public:
     return input_[pos];
   }
 
+  /** Get the current char without advancing to
+   * the next one.
+   */
+  char current_char() {
+    if (pos_ >= n_chars_) {
+      return 0;
+    }
+    return input_[pos_];
+  }
+
   /** Consume char from input.
    *
    * @return The char at the current position of the input stream
@@ -71,15 +75,20 @@ public:
     drop_whitespace();
     char c = current_char();
     ++pos_;
+    drop_whitespace();
     return c;
   }
 
-  size_t get_position() const {return pos_;}
+  size_t get_position() const { return pos_; }
+
+  std::string extract(size_t start, size_t length) {
+    return std::string(input_, start, length);
+  }
 
 private:
+  std::string input_;
   size_t pos_ = 0;
   size_t n_chars_ = 0;
-  std::string input_;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -96,18 +105,21 @@ public:
 
     if (c == 0) {
       type = TokenType::END;
+      content = input.extract(start, length);
       return;
     }
 
     if (c == ',') {
       type = TokenType::COMMA;
       length = 1;
+      content = input.extract(start, length);
       return;
     }
 
     if (c == '=') {
       type = TokenType::EQUAL;
       length = 1;
+      content = input.extract(start, length);
       return;
     }
 
@@ -119,22 +131,25 @@ public:
         c = input.consume();
         ++length;
       } while ((previous != '\\') && (c != '\"'));
+      content = input.extract(start + 1, length - 1);
       return;
     }
 
     if (detail::is_identifier_char(c)) {
       type = TokenType::IDENTIFIER;
-      while (detail::is_identifier_char(input.peek())) {
+      while (detail::is_identifier_char(input.current_char())) {
         input.consume();
         ++length;
       }
+      content = input.extract(start, length);
       return;
     }
   }
 
   TokenType type;
   size_t start = 0;
-  size_t length = 0;
+  size_t length = 1;
+  std::string content;
 };
 
 class Lexer {

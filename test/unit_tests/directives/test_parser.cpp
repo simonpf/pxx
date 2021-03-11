@@ -31,10 +31,29 @@ TEST_CASE( "Token extraction", "[directives/token]" ) {
     using pxx::directives::Token;
     using pxx::directives::TokenType;
 
-    auto input = Input("=identifier, another_identifier \"a string\"");
+    auto input = Input("=identifier,  another_identifier \"a string\"");
 
     Token token{input};
-
     REQUIRE(token.type == TokenType::EQUAL);
+    REQUIRE(token.content == "=");
+
+    token = Token{input};
+    REQUIRE(token.type == TokenType::IDENTIFIER);
+    REQUIRE(token.content == "identifier");
+
+    token = Token{input};
+    REQUIRE(token.type == TokenType::COMMA);
+    REQUIRE(token.content == ",");
+
+    token = Token{input};
+    REQUIRE(token.type == TokenType::IDENTIFIER);
+    REQUIRE(token.content == "another_identifier");
+
+    token = Token{input};
+    REQUIRE(token.type == TokenType::STRING);
+    REQUIRE(token.content == "a string");
+
+    token = Token{input};
+    REQUIRE(token.type == TokenType::END);
 
 }
