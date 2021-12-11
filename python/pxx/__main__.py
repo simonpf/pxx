@@ -1,7 +1,7 @@
 import argparse
 import sys
 import os
-from _pxx import Parser, Module
+from _pxx import Generator
 
 def main():
     ###########################################################################
@@ -83,20 +83,15 @@ def main():
     include_path = os.path.join(os.path.dirname(__file__), "include", "clang")
 
     print("other args: ", other_args)
-    parser = Parser(input_file, [f"-I{include_path}"] + other_args)
-    if export_all:
-        parser.set_export_default()
-    tu = parser.parse()
+    generator = Generator(input_file, [f"-I{include_path}"] + other_args)
 
     # Only dumping AST.
     if args.dump_ast:
         print(f"\n### CXX Translation Unit: {input_file} ###\n")
-        tu.dump_ast()
-        tu.print()
+        generator.dump_ast()
         return 0
 
-    module = Module(module_name, [os.path.basename(input_file)])
-    s = module.render(tu)
+    s = generator.print_bindings()
 
     # Write output
     if output_file is None:

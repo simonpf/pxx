@@ -8,65 +8,98 @@
 #define __PXX_GENERATOR_H__
 
 #include <string>
+#include <memory>
+#include <fstream>
+#include <sstream>
 
 #include <clang-c/Index.h>
+#include <pxx/cxx/parser.h>
 
 namespace pxx {
 
-/** Generator for Python interfaces.
- *
- * This class is responsible of generating Python bindings
- * from a C++ translation unit.
- */
-class Generator {
+class Module {
 
-  /** Invoke clang.
-   *
-   * This function run clang on the provided input and sets the
-   * index_ and unit_ memeber variables of the class.
-   */
-  void invoke_clang() {
-    std::vector<const char *> command_line_args = {"-x", "c++", "-std=c++11",
-                                                   "-fparse-all-comments"};
-    for (auto &s : extra_arguments_) {
-      command_line_args.push_back(s.c_str());
-    }
-    index_ = clang_createIndex(0, 0);
-    unit_ = clang_parseTranslationUnit(
-        index_, filename_.c_str(), command_line_args.data(),
-        command_line_args.size(), nullptr, 0, CXTranslationUnit_None);
-    for (size_t i = 0; i < clang_getNumDiagnostics(unit_); ++i) {
-      std::cout << "Warning encountered during parsing of translation unit:"
-                << std::endl;
-      std::cout << clang_getDiagnostic(unit_, i) << std::endl;
-    }
-    if (unit_ == nullptr) {
-      throw std::runtime_error("Failed to parse the translation unit.");
-    }
+  void write_module_header(std::ostream &output) {
+    output << R"(
+#define PY_SSIZE_T_CLEAN
+#include <pybind11/pybind11.h>
+
+namespace py = pybind11;
+        )";
   }
 
 public:
-  Generator(std::string filename,
-            std::vector<std::string> extra_arguments)
-      : filename_(filename),
-        extra_arguments_(extra_arguments)
-  {
-      invoke_clang();
+  Module(cxx::ASTNode *ast,
+        cxx::Scope *scope,
+        std::string name,
+         std::string output_file = "")
+      : ast_(ast), scope_(scope), name_(name), output_file_(output_file) {}
+
+  void write_bindings() {
+    std::ostream *output = &std::cout;
+    std::unique_ptr<std::ostream> output_file = nullptr;
+    if (output_file_.size() != 0) {
+      output_file = std::make_unique<std::ofstream>(output_file_);
+      output = output_file.get();
+    }
+    write_module_header(*output);
+    ast_->write_bindings(*output);
   }
 
+  std::string print_bindings() {
+    std::stringstream output{};
 
-  ~Generator() {
-      clang_disposeTranslationUnit(unit_);
-      clang_disposeIndex(index_);
+    write_module_header(output);
+    ast_->write_bindings(output);
+    return output.str();
   }
 
 private:
+  cxx::ASTNode *ast_;
+  cxx::Scope *scope_;
+  std::string name_;
+  std::string output_file_;
+};
 
+  /** Generator for Python interfaces.
+   *
+   * This class is responsible of generating Python bindings
+   * from a C++ translation unit.
+   */
+  class Generator {
+
+  public:
+    /** Create a new generator for a given C++ source file.
+     *
+     * @param filename Path to a C++ file for which to generate Python
+     * bindings.
+     * @param extra_arguments Vector of strings containing extra arguments
+     * that may be required to parse the translation unit and which will be
+     * passed to clang.
+     */
+    Generator(std::string filename, std::vector<std::string> extra_arguments)
+        : filename_(filename), extra_arguments_(extra_arguments) {
+      cxx::Parser parser(filename, extra_arguments);
+      auto results = parser.parse();
+      ast_ = std::unique_ptr<cxx::ASTNode>(std::get<0>(results));
+      scope_ = std::unique_ptr<cxx::Scope>(std::get<1>(results));
+    }
+
+
+    std::string print_bindings() {
+        Module module(ast_.get(), scope_.get(), "", "");
+        return module.print_bindings();
+
+    }
+
+  void print_ast() { ast_->print_tree(std::cout, 2); }
+
+private:
   std::string filename_;
   std::vector<std::string> extra_arguments_;
 
-  CXIndex index_;
-  CXTranslationUnit unit_;
+  std::unique_ptr<cxx::ASTNode> ast_;
+  std::unique_ptr<cxx::Scope> scope_;
 };
 
 } // namespace pxx

@@ -65,7 +65,7 @@ public:
 
     void write_bindings(std::ostream& output) const override {
         auto qualified_name = get_qualified_name();
-        output << "{" << std::endl;
+        output << "namespace {" << std::endl;
         output << "  py::class_<" << qualified_name << "> py_class";
         output << "{module, \"" << name_ << "\"};" << std::endl;
         for (auto &c : children_) {

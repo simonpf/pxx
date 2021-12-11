@@ -186,8 +186,8 @@ public:
   }
 
   ~Parser() {
-    clang_disposeTranslationUnit(unit_);
     clang_disposeIndex(index_);
+    clang_disposeTranslationUnit(unit_);
   }
 
 private:
