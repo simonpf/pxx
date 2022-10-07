@@ -1,7 +1,7 @@
 #include <iostream>
 #include <sstream>
 
-#include "catch2/catch.hpp"
+#include "catch2/catch_test_macros.hpp"
 #include "pxx/writer.h"
 #include "pxx/cxx/parser.h"
 
@@ -24,6 +24,7 @@ TEST_CASE( "file_header", "[cxx/writer]" ) {
     std::cout << output.str() << std::endl;
 
 }
+
 TEST_CASE( "write_class", "[cxx/writer]" ) {
 
     using pxx::Writer;

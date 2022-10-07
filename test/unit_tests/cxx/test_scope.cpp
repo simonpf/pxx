@@ -1,6 +1,6 @@
 #include <tuple>
 
-#include "catch2/catch.hpp"
+#include "catch2/catch_test_macros.hpp"
 #include "pxx/cxx/scope.h"
 #include "pxx/cxx/ast.h"
 

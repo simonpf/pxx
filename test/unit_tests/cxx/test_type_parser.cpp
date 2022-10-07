@@ -1,7 +1,8 @@
 #include <tuple>
 #include <sstream>
 
-#include "catch2/catch.hpp"
+#include "catch2/catch_test_macros.hpp"
+
 #include "pxx/cxx/type_parser.h"
 
 TEST_CASE( "Printing of basic types", "[cxx/type_parser]" ) {

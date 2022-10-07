@@ -11,6 +11,13 @@ add_executable(
   test_writer.cpp
   )
 
+add_executable(
+  test_writer
+  test_writer.cpp
+)
+target_link_libraries(test_writer PRIVATE Catch2::Catch2WithMain ${LIBCLANG_LIBRARIES})
+target_include_directories(test_writer PUBLIC ${CMAKE_SOURCE_DIR}/include)
+
 find_package(LibClang)
 target_include_directories(test_main PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(test_main Catch2::Catch2 ${LIBCLANG_LIBRARIES})

@@ -1,4 +1,4 @@
-#include "catch2/catch.hpp"
+#include "catch2/catch_test_macros.hpp"
 #include "pxx/cxx/type_names.h"
 
 TEST_CASE( "is_qualified", "[cxx/type_name]" ) {
