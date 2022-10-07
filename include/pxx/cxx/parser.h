@@ -1,8 +1,7 @@
 /** \file pxx/cxx/parser.h
  *
- * This file defines the parser class, which parser the libclang AST and
+ * This file defines the parser class, which parses the libclang AST and
  * builds the pxx AST and scope.
- *
  */
 #ifndef __PXX_CXX_PARSER_H__
 #define __PXX_CXX_PARSER_H__

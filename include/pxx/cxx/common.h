@@ -1,4 +1,4 @@
-/** \file pxx/cxx/common.h
+/** ifile pxx/cxx/common.h
  *
  * This file contains general definition that are required in multiple
  * places.
