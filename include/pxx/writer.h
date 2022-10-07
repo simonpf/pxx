@@ -42,7 +42,7 @@ void write_file_header(std::ostream &output,
       output << "#include <pybind11/eigen_tensor.h>" << std::endl;
   }
   for (auto &i : settings.includes) {
-    output << "#include " << i << std::endl;
+      output << "#include <" << i << ">" << std::endl;
   }
   output << std::endl;
   output << "namespace py = pybind11;" << std::endl;
