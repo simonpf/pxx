@@ -49,6 +49,16 @@ public:
         return output.str();
     }
 
+    std::string print_bindings(std::string name) {
+        ASTNode* node = scope_->lookup_symbol(name);
+        if (node) {
+            std::stringstream output{};
+            node->write_bindings(output);
+            return output.str();
+        }
+        return std::string{};
+    }
+
 
 private:
 

@@ -40,7 +40,7 @@ include(cmake/pxx-config.cmake)
 #
 
 find_package(LibClang)
-find_package(Python COMPONENTS Interpreter Development)
+find_package(Python3 COMPONENTS Interpreter Development)
 
 #
 # Find required packages

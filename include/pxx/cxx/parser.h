@@ -8,9 +8,11 @@
 
 #include <clang-c/Index.h>
 #include <memory>
-#include <pxx/cxx/ast.h>
 #include <string>
 #include <tuple>
+
+#include <pxx/cxx/ast.h>
+#include <pxx/utils.h>
 
 namespace pxx {
 namespace cxx {
@@ -155,10 +157,12 @@ public:
     unit_ = clang_parseTranslationUnit(
         index_, filename.c_str(), command_line_args.data(),
         command_line_args.size(), nullptr, 0, CXTranslationUnit_None);
+
     for (size_t i = 0; i < clang_getNumDiagnostics(unit_); ++i) {
-      std::cout << "Warning encountered during parsing of translation unit:"
-                << std::endl;
-      std::cout << clang_getDiagnostic(unit_, i) << std::endl;
+        std::cout << "Warning encountered during parsing of translation unit:"
+                  << std::endl;
+        auto diag = clang_getDiagnostic(unit_, i);
+        std::cout << pxx::to_string(clang_getDiagnosticSpelling(diag)) << std::endl;
     }
     if (unit_ == nullptr) {
       throw std::runtime_error("Failed to parse the translation unit.");
@@ -171,8 +175,8 @@ public:
     CXCursor cursor = clang_getTranslationUnitCursor(unit_);
 
     AstFormatter formatter(2);
-    clang_visitChildren(
-        cursor, AstFormatter::traverse, &formatter);
+    //clang_visitChildren(
+    //    cursor, AstFormatter::traverse, &formatter);
 
     Scope *root_scope = new Scope();
     ASTNode *root_node =

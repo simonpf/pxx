@@ -1,7 +1,7 @@
 import argparse
 import sys
 import os
-from _pxx import Generator
+from _pxx import TranslationUnit, Settings
 
 def main():
     ###########################################################################
@@ -26,6 +26,14 @@ def main():
                         action='store_true',
                         help="If provided, pxx only dumps the AST of the parsed"
                         " translation unit.")
+    parser.add_argument(
+        "--name",
+        metavar="name",
+        default=None,
+        type=str,
+        help="Print only binding of the language object with the given name."
+    )
+
     parser.add_argument("--classes",
                         nargs="*",
                         metavar="Class1, ...",
@@ -82,16 +90,22 @@ def main():
 
     include_path = os.path.join(os.path.dirname(__file__), "include", "clang")
 
-    print("other args: ", other_args)
-    generator = Generator(input_file, [f"-I{include_path}"] + other_args)
+    tu = TranslationUnit(input_file, [f"-I{include_path}"] + other_args)
 
     # Only dumping AST.
-    if args.dump_ast:
-        print(f"\n### CXX Translation Unit: {input_file} ###\n")
-        generator.dump_ast()
+    #if args.dump_ast:
+    #    print(f"\n### CXX Translation Unit: {input_file} ###\n")
+    #    tu.dump_ast()
+    #    return 0
+    if args.name is not None:
+        s = tu.print_bindings(args.name)
+        print(s)
         return 0
 
-    s = generator.print_bindings()
+
+    settings = Settings()
+    settings.includes = [input_file]
+    s = tu.print_bindings(settings)
 
     # Write output
     if output_file is None:

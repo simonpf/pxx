@@ -199,7 +199,6 @@ class Constructor : public MemberFunction {
 public:
   Constructor(CXCursor cursor, ASTNode *parent, Scope *scope)
       : MemberFunction(cursor, ASTNodeType::CONSTRUCTOR, parent, scope) {
-      std::cout << "constructor: " << parent->get_name() << std::endl;
 
   }
 

@@ -17,5 +17,12 @@ py::class_<pxx::Settings>(m, "Settings")
 py::class_<pxx::cxx::TranslationUnit>(m, "TranslationUnit")
     .def(py::init<std::string, std::vector<std::string>>())
     .def("dump_ast", &pxx::cxx::TranslationUnit::dump_ast)
-    .def("print_bindings", &pxx::cxx::TranslationUnit::print_bindings);
+    .def("print_bindings", static_cast<std::string (pxx::cxx::TranslationUnit::*)(pxx::Settings)>(
+             &pxx::cxx::TranslationUnit::print_bindings
+             )
+        )
+    .def("print_bindings", static_cast<std::string (pxx::cxx::TranslationUnit::*)(std::string)>(
+             &pxx::cxx::TranslationUnit::print_bindings
+             )
+    );
 }

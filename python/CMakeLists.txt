@@ -18,9 +18,9 @@ configure_file(pxx/__main__.py pxx/__main__.py @ONLY)
 
 add_custom_target(pxx_python
   ALL
-  COMMAND ${Python_EXECUTABLE} setup.py build
+  COMMAND ${Python3_EXECUTABLE} setup.py build
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  DEPENDS pxx/__init__.py pxx/__main__.py
+  DEPENDS pxx/__init__.py pxx/__main__.py setup.py _pxx
   COMMENT "Building pxx Python package.")
 
 #
