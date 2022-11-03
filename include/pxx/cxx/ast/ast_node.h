@@ -181,15 +181,17 @@ public:
    */
   virtual void write_bindings(std::ostream &output) const {
     for (auto& c : children_) {
-      c->write_bindings(output);
+        if (c) {
+            c->write_bindings(output);
+        }
     }
   }
 
   std::string print_comment_as_raw_string() const {
       std::stringstream stream;
-      stream << "R\"__PXX_RAW_STRING__(\n";
+      stream << "R\"__PXX_RS__(\n";
       stream << comment_ << std::endl;
-      stream << ")__PXX_RAW_STRING__\"";
+      stream << ")__PXX_RS__\"";
       return stream.str();
   }
 
