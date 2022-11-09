@@ -59,8 +59,10 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
       auto child = dynamic_cast<Overload<Constructor>*>(
           scope->add<Overload<Constructor>>(cursor, parent)
           );
-      auto constructor = child->add_overload(cursor);
-      parent->add_child(constructor);
+      if (child) {
+          auto constructor = child->add_overload(cursor);
+          parent->add_child(constructor);
+      }
   } break;
 
   // Class member declaration.
@@ -68,14 +70,18 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
       auto child = dynamic_cast<Overload<MemberFunction>*>(
           scope->add<Overload<MemberFunction>>(cursor, parent)
           );
-    auto method = child->add_overload(cursor);
-    parent->add_child(method);
+      if (child) {
+          auto method = child->add_overload(cursor);
+          parent->add_child(method);
+      }
   } break;
 
   // Class member variable.
   case CXCursor_FieldDecl: {
       auto child = scope->add<MemberVariable>(cursor, parent);
-      parent->add_child(child);
+      if (child) {
+          parent->add_child(child);
+      }
   } break;
 
   // Function definition.
@@ -83,8 +89,10 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
     auto child = dynamic_cast<Overload<Function>*>(
         scope->add<Overload<Function>>(cursor, parent)
         );
-    auto func = child->add_overload(cursor);
-    parent->add_child(func);
+    if (child) {
+        auto func = child->add_overload(cursor);
+        parent->add_child(func);
+    }
   } break;
 
   //
@@ -101,14 +109,16 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
   case CXCursor_ClassTemplatePartialSpecialization: {
       std::string qualified_name = pxx::clang::get_qualified_name(cursor);
       auto templ = dynamic_cast<ClassTemplate*>(scope->lookup_symbol(qualified_name));
-      auto type = templ->get_type();
-      if (type == ASTNodeType::CLASS_TEMPLATE) {
-          auto new_class = std::make_unique<ClassTemplate>(cursor, parent, scope);
-          templ->add_specialization(std::move(new_class));
-      }
-      if (type == ASTNodeType::FUNCTION_TEMPLATE) {
-          auto new_function = std::make_unique<FunctionTemplate>(cursor, parent, scope);
-          templ->add_specialization(std::move(new_function));
+      if (templ) {
+        auto type = templ->get_type();
+        if (type == ASTNodeType::CLASS_TEMPLATE) {
+            auto new_class = std::make_unique<ClassTemplate>(cursor, parent, scope);
+            templ->add_specialization(std::move(new_class));
+        }
+        if (type == ASTNodeType::FUNCTION_TEMPLATE) {
+            auto new_function = std::make_unique<FunctionTemplate>(cursor, parent, scope);
+            templ->add_specialization(std::move(new_function));
+        }
       }
   } break;
 
@@ -116,10 +126,12 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
       auto child = dynamic_cast<Overload<FunctionTemplate>*>(
           scope->add<Overload<FunctionTemplate>>(cursor, parent)
           );
-      auto function = child->add_overload(cursor);
-      auto data = std::make_tuple(function, scope);
-      clang_visitChildren(cursor, parse_clang_ast, &data);
-      parent->add_child(child);
+      if (child) {
+          auto function = child->add_overload(cursor);
+          auto data = std::make_tuple(function, scope);
+          clang_visitChildren(cursor, parse_clang_ast, &data);
+          parent->add_child(child);
+      }
   } break;
 
   case CXCursor_TemplateTypeParameter: {
@@ -132,6 +144,15 @@ CXChildVisitResult parse_clang_ast(CXCursor cursor, CXCursor /*parent*/,
       t->add_template_parameter(cursor);
   } break;
 
+      case CXCursor_TypeAliasDecl: {
+          scope->add<TypeAlias>(cursor, parent);
+          std::cout << scope->lookup_symbol("my_int") << std::endl;
+      } break;
+
+      //case CXCursor_TypedefDecl: {
+      //    auto name = detail::get_name(cursor);
+      //    std::cout << "TYPE DEF :: " << name << std::endl;
+      //} break;
 
   default:
     break;

@@ -6,5 +6,6 @@
 #include <pxx/cxx/ast/function.h>
 #include <pxx/cxx/ast/class.h>
 #include <pxx/cxx/ast/template.h>
+#include <pxx/cxx/ast/type_alias.h>
 
 #endif

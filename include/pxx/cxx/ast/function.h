@@ -61,7 +61,8 @@ public:
     FunctionTemplate(CXCursor cursor,
                      ASTNode *parent,
                      Scope *scope)
-        : Template(cursor, ASTNodeType::FUNCTION_TEMPLATE, parent, scope)
+        :
+    Template(cursor, ASTNodeType::FUNCTION_TEMPLATE, parent, scope)
          {}
     /// Static function to determine the node type of this class.
     static ASTNodeType get_node_type() { return ASTNodeType::FUNCTION_TEMPLATE; }

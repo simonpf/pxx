@@ -137,13 +137,14 @@ public:
       if (child) {
         return child->lookup_symbol(remainder);
       }
-    } else {
-      auto symbol = symbols_.find(name);
-      if (symbol != symbols_.end()) {
-        return symbol->second.get();
-      }
       return nullptr;
     }
+
+    auto symbol = symbols_.find(name);
+    if (symbol != symbols_.end()) {
+        return symbol->second.get();
+    }
+
     if (parent_) {
       return parent_->lookup_symbol(name);
     }
@@ -157,6 +158,7 @@ public:
       return found;
     }
     auto child = std::make_unique<T>(cursor, parent, this);
+    std::cout << "ADDING : " << child->get_name() << std::endl;
     auto result = symbols_.emplace(child->get_name(), std::move(child));
     return result.first->second.get();
   }

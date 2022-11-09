@@ -34,7 +34,14 @@ inline Access get_access_level(CXCursor cursor) {
   }
   return Access::PRIVATE;
 }
+
+inline bool is_const(CXCursor cursor) {
+    auto type = clang_getCursorType(cursor);
+    return clang_isConstQualifiedType(type);
+}
+
 } // namespace detail
+
 
 class ClassTemplate : public Template {
 public:
@@ -65,13 +72,11 @@ public:
 
     void write_bindings(std::ostream& output) const override {
         auto qualified_name = get_qualified_name();
-        output << "namespace {" << std::endl;
         output << "  py::class_<" << qualified_name << "> py_class";
         output << "{module, \"" << name_ << "\"};" << std::endl;
         for (auto &c : children_) {
             c->write_bindings(output);
         }
-        output << "}" << std::endl;
     }
 
 private:
@@ -83,20 +88,20 @@ class MemberVariable : public ASTNode {
 public:
   MemberVariable(CXCursor cursor, ASTNode *parent, Scope *scope)
       : ASTNode(cursor, ASTNodeType::MEMBER_VARIABLE, parent, scope),
-        is_const_(clang_CXXMethod_isConst(cursor)),
         is_static_(clang_CXXMethod_isStatic(cursor)) {
     access_level_ = detail::get_access_level(cursor);
+    std::cout << "MEMBERVAR :: " << name_ << std::endl;
   }
 
   void write_bindings(std::ostream &output) const override {
     auto qualified_name = get_qualified_name();
     if (access_level_ == Access::PUBLIC) {
       if (is_const_) {
-        output << "  py_class.def_readonly(" << name_ << ", &"
+        output << "  py_class.def_readonly(\"" << name_ << "\", &"
                << qualified_name;
         output << ");" << std::endl;
       } else {
-        output << "  py_class.def_readwrite(" << name_ << ", &"
+        output << "  py_class.def_readwrite(\"" << name_ << "\", &"
                << qualified_name;
         output << ");" << std::endl;
       }
@@ -140,7 +145,10 @@ public:
   std::string get_pointer_spelling() const {
       std::string parent_name = parent_->get_qualified_name();
       std::string return_type = replace_type_names(return_type_, scope_);
-      std::string result = return_type + "(" + parent_name + "*)(";
+      std::string result = return_type + " (";
+      if (!is_static_) result += parent_name + "::";
+      result += "*)(";
+
       for (size_t i = 0; i < argument_types_.size(); ++i) {
           result += replace_type_names(argument_types_[i], scope_);
           if (i + 1 < argument_types_.size()) {
@@ -148,6 +156,7 @@ public:
           }
       }
       result += ")";
+      if (is_const_) result += " const";
       return result;
   }
 
@@ -156,10 +165,12 @@ public:
   void write_bindings(std::ostream &output) const override {
     if (access_level_ == Access::PUBLIC) {
       auto qualified_name = get_qualified_name();
+      auto pointer_type = get_pointer_spelling();
       if (comment_ == "") {
-          output << "  py_class.def(" << name_ << ", &" << qualified_name << ");";
+          output << "  py_class.def(\"" << name_ << "\", &" << qualified_name << ");";
       } else {
-          output << "  py_class.def(" << name_ << ", &" << qualified_name << ",";
+          output << "  py_class.def(\"" << name_ << "\", ";
+          output << "static_cast<" << pointer_type << "> (&" << qualified_name << "),";
           output << std::endl << print_comment_as_raw_string() << ");";
       }
       output << std::endl;

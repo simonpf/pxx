@@ -194,8 +194,11 @@ inline std::string replace_type_names(std::string spelling, Scope *scope) {
         start = iterator.get_token_start();
         identifier = *iterator;
       }
-      std::cout << "Looking up: " << identifier << std::endl;
       auto symbol = scope->lookup_symbol(identifier);
+      if (!symbol) {
+          symbol = scope->get_root_scope()->lookup_symbol(identifier);
+      }
+      std::cout << symbol << std::endl;
       if (symbol) {
           iterator.replace(start, identifier.size(), symbol->get_qualified_name());
       }

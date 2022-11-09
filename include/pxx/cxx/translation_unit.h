@@ -42,6 +42,15 @@ public:
         return output.str();
     }
 
+    std::string dump_ast(std::string name) {
+        ASTNode* node = scope_->lookup_symbol(name);
+        std::stringstream output{};
+        if (node) {
+            node->print_tree(output);
+        }
+        return output.str();
+    }
+
     std::string print_bindings(Settings settings) {
         std::stringstream output{};
         auto writer = Writer{output};
