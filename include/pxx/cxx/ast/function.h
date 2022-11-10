@@ -8,6 +8,7 @@
 
 #include <pxx/cxx/ast/ast_node.h>
 #include <pxx/cxx/ast/template.h>
+#include <pxx/cxx/type_expression.h>
 
 namespace pxx {
 namespace cxx {
@@ -48,6 +49,28 @@ public:
 
   /// Static function to determine the node type of this class.
   static ASTNodeType get_node_type() { return ASTNodeType::FUNCTION; }
+
+  std::string get_pointer_spelling() const {
+      std::string parent_name = parent_->get_qualified_name();
+      std::string return_type = types::replace_type_names(return_type_, scope_);
+      std::string result = return_type + " (*)(";
+      for (size_t i = 0; i < argument_types_.size(); ++i) {
+          result += types::replace_type_names(argument_types_[i], scope_);
+          if (i + 1 < argument_types_.size()) {
+              result += ", ";
+          }
+      }
+      result += ")";
+      return result;
+  }
+
+  void write_bindings(std::ostream &output) const override {
+      auto qualified_name = get_qualified_name();
+      auto pointer_type = get_pointer_spelling();
+      output << "module.def(\"" << name_ << "\", ";
+      output << "static_cast<" << pointer_type << "> (&" << qualified_name << "));";
+      output << std::endl;
+  }
 
   inline friend std::ostream &operator<<(std::ostream &out, const Function &);
 
